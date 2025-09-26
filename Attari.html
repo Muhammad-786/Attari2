@@ -67,10 +67,45 @@
           <div class="text-sm text-slate-500">Create your teacher account.</div>
           <input id="suEmail" type="email" placeholder="Email" class="w-full rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border-2 border-slate-200/60 dark:border-slate-700/60 px-4 py-3 focus:border-emerald-500 focus:ring-0" required />
           <input id="suPass" type="password" placeholder="Password (min 6)" minlength="6" class="w-full rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border-2 border-slate-200/60 dark:border-slate-700/60 px-4 py-3 focus:border-emerald-500 focus:ring-0" required />
-          <button class="btn-primary w-full px-5 py-3 rounded-2xl text-white font-semibold">Create account</button>
+          <input id="suClassName" type="text" placeholder="Class Name (e.g., Attari Class)" class="w-full rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border-2 border-slate-200/60 dark:border-slate-700/60 px-4 py-3 focus:border-emerald-500 focus:ring-0" required />
+          <button class="btn-primary w-full px-5 py-3 rounded-2xl text-white font-semibold">Create account & class</button>
           <p id="suMsg" class="text-sm text-slate-500"></p>
           <div class="text-sm"><button id="showSignin" type="button" class="text-emerald-700 hover:underline">Back to sign in</button></div>
         </form>
+      </div>
+    </div>
+
+    <!-- CLASS SELECTION -->
+    <div id="classSelection" class="hidden max-w-4xl mx-auto">
+      <div class="glass bg-white/70 dark:bg-slate-900/70 rounded-3xl shadow-2xl border border-white/20 dark:border-slate-700/30">
+        <div class="p-6 md:p-8 border-b border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between">
+          <h2 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-emerald-600">Your Classes</h2>
+          <button id="createNewClass" class="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium shadow-lg">+ Create New Class</button>
+        </div>
+        <div class="p-6 md:p-8">
+          <div id="classesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+          <div id="noClasses" class="hidden text-center py-10">
+            <div class="text-5xl mb-3">🏫</div>
+            <h3 class="text-lg font-semibold text-slate-600 dark:text-slate-400">No classes yet</h3>
+            <p class="text-slate-500">Create your first class to get started.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Create Class Modal -->
+      <div id="createClassModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div class="glass bg-white/90 dark:bg-slate-900/90 rounded-3xl shadow-2xl border border-white/20 dark:border-slate-700/30 max-w-md w-full mx-4">
+          <div class="p-6 border-b border-slate-200/50 dark:border-slate-700/50">
+            <h3 class="text-xl font-bold">Create New Class</h3>
+          </div>
+          <form id="createClassForm" class="p-6 space-y-4">
+            <input id="newClassName" type="text" placeholder="Class Name" class="w-full rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border-2 border-slate-200/60 dark:border-slate-700/60 px-4 py-3 focus:border-emerald-500 focus:ring-0" required />
+            <div class="flex gap-3">
+              <button type="submit" class="btn-primary flex-1 px-4 py-3 rounded-2xl text-white font-semibold">Create Class</button>
+              <button type="button" id="cancelCreateClass" class="px-4 py-3 rounded-2xl bg-slate-200/80 dark:bg-slate-700/80 text-slate-700 dark:text-slate-200 font-medium">Cancel</button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
 
@@ -81,8 +116,15 @@
         <section class="xl:col-span-2">
           <div class="glass bg-white/70 dark:bg-slate-900/70 rounded-3xl shadow-2xl border border-white/20 dark:border-slate-700/30">
             <div class="p-6 md:p-8 border-b border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between">
-              <h2 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-600"><span id="formTitle">✨ New Entry</span></h2>
-              <button id="signOutBtn" class="px-3 py-1.5 rounded-xl ring-1 ring-slate-300 dark:ring-slate-700 text-sm">Sign out</button>
+              <div>
+                <h2 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-600"><span id="formTitle">✨ New Entry</span></h2>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Class: <span id="currentClassName">-</span></p>
+              </div>
+              <div class="flex gap-2">
+                <button id="manageStudentsBtn" class="px-3 py-1.5 rounded-xl ring-1 ring-slate-300 dark:ring-slate-700 text-sm">Manage Students</button>
+                <button id="switchClassBtn" class="px-3 py-1.5 rounded-xl ring-1 ring-slate-300 dark:ring-slate-700 text-sm">Switch Class</button>
+                <button id="signOutBtn" class="px-3 py-1.5 rounded-xl ring-1 ring-slate-300 dark:ring-slate-700 text-sm">Sign out</button>
+              </div>
             </div>
             <form id="notesForm" class="p-6 md:p-8 space-y-6">
               <div>
@@ -205,9 +247,30 @@
 
       <footer class="mt-12 text-center">
         <div class="glass bg-white/60 dark:bg-slate-800/60 rounded-2xl px-6 py-4 inline-block">
-          <p class="text-xs text-slate-600 dark:text-slate-400">🔒 Data: <span class="font-mono font-semibold">classes/Attari/notes</span> • Unique per <em>date + student</em></p>
+          <p class="text-xs text-slate-600 dark:text-slate-400">🔒 Data: <span class="font-mono font-semibold">classes/<span id="footerClassId">your-class</span>/notes</span> • Unique per <em>date + student</em></p>
         </div>
       </footer>
+    </div>
+  </div>
+
+  <!-- Student Management Modal -->
+  <div id="studentModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="glass bg-white/90 dark:bg-slate-900/90 rounded-3xl shadow-2xl border border-white/20 dark:border-slate-700/30 max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
+      <div class="p-6 border-b border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between">
+        <h3 class="text-xl font-bold">Manage Students</h3>
+        <button id="closeStudentModal" class="text-slate-500 hover:text-slate-700">✕</button>
+      </div>
+      <div class="p-6 space-y-4 overflow-y-auto max-h-[60vh]">
+        <form id="addStudentForm" class="flex gap-3 mb-6">
+          <input id="newStudentName" type="text" placeholder="Student Name" class="flex-1 rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border-2 border-slate-200/60 dark:border-slate-700/60 px-4 py-3 focus:border-emerald-500 focus:ring-0" required />
+          <button type="submit" class="btn-primary px-6 py-3 rounded-2xl text-white font-semibold">Add Student</button>
+        </form>
+        <div id="studentsList" class="space-y-2"></div>
+        <div id="noStudents" class="hidden text-center py-6 text-slate-500">
+          <div class="text-3xl mb-2">👥</div>
+          <p>No students added yet</p>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -215,9 +278,9 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
-    import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, query, orderBy, where, limit as qLimit, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+    import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, query, orderBy, where, limit as qLimit, onSnapshot, serverTimestamp, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
 
-    const firebaseConfig = { apiKey:"AIzaSyCTGIoNNey_0GwRxg_85Xv-jEQtQDjzehw", authDomain:"attari-579d2.firebaseapp.com", projectId:"attari-579d2", storageBucket:"attari-579d2.firebasestorage.app", messagingSenderId:"765966619098", appId:"1:765966619098:web:9ab852c4881426472b70e3" };
+    const firebaseConfig = { apiKey:"AIzaSyAS37LFzGqN3YFmT5n3i3qSNXOG8G8R2as", authDomain:"attari2-f55f3.firebaseapp.com", projectId:"attari2-f55f3", storageBucket:"attari2-f55f3.firebasestorage.app", messagingSenderId:"199694820477", appId:"1:199694820477:web:163be13dba7c1878cfbd14" };
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
@@ -225,6 +288,7 @@
 
     // UI refs
     const authGate = document.getElementById('authGate');
+    const classSelection = document.getElementById('classSelection');
     const appShell = document.getElementById('app');
     const authStatus = document.getElementById('authStatus');
     const dot = document.getElementById('dot');
@@ -232,18 +296,49 @@
     const signOutBtn = document.getElementById('signOutBtn');
     const toast = document.getElementById('toast');
 
+    // Class management elements
+    const classesList = document.getElementById('classesList');
+    const noClasses = document.getElementById('noClasses');
+    const createNewClass = document.getElementById('createNewClass');
+    const createClassModal = document.getElementById('createClassModal');
+    const createClassForm = document.getElementById('createClassForm');
+    const newClassName = document.getElementById('newClassName');
+    const cancelCreateClass = document.getElementById('cancelCreateClass');
+    const currentClassName = document.getElementById('currentClassName');
+    const switchClassBtn = document.getElementById('switchClassBtn');
+    const manageStudentsBtn = document.getElementById('manageStudentsBtn');
+
+    // Student management elements
+    const studentModal = document.getElementById('studentModal');
+    const closeStudentModal = document.getElementById('closeStudentModal');
+    const addStudentForm = document.getElementById('addStudentForm');
+    const newStudentName = document.getElementById('newStudentName');
+    const studentsList = document.getElementById('studentsList');
+    const noStudents = document.getElementById('noStudents');
+
     // Forms
     const signinForm = document.getElementById('signinForm');
     const signupForm = document.getElementById('signupForm');
+    const siEmail = document.getElementById('siEmail');
+    const siPass = document.getElementById('siPass');
+    const siMsg = document.getElementById('siMsg');
+    const suEmail = document.getElementById('suEmail');
+    const suPass = document.getElementById('suPass');
+    const suClassName = document.getElementById('suClassName');
+    const suMsg = document.getElementById('suMsg');
+    
     document.getElementById('showSignup').addEventListener('click',()=>{signinForm.classList.add('hidden');signupForm.classList.remove('hidden')});
     document.getElementById('showSignin').addEventListener('click',()=>{signupForm.classList.add('hidden');signinForm.classList.remove('hidden')});
 
     signinForm.addEventListener('submit', async (e)=>{e.preventDefault();const email=siEmail.value.trim();const pass=siPass.value;siMsg.textContent='';try{await signInWithEmailAndPassword(auth,email,pass);}catch(err){siMsg.textContent=err.message;showToast(err.message,'error')}});
-    signupForm.addEventListener('submit', async (e)=>{e.preventDefault();const email=suEmail.value.trim();const pass=suPass.value;suMsg.textContent='';try{await createUserWithEmailAndPassword(auth,email,pass);suMsg.textContent='Account created. Signed in.';showToast('Welcome!','success')}catch(err){suMsg.textContent=err.message;showToast(err.message,'error')}});
+    signupForm.addEventListener('submit', async (e)=>{e.preventDefault();const email=suEmail.value.trim();const pass=suPass.value;const className=suClassName.value.trim();suMsg.textContent='';try{const userCredential=await createUserWithEmailAndPassword(auth,email,pass);const user=userCredential.user;await createUserProfile(user.uid,email,className);suMsg.textContent='Account created. Signed in.';showToast('Welcome!','success')}catch(err){suMsg.textContent=err.message;showToast(err.message,'error')}});
     signOutBtn?.addEventListener('click', ()=>signOut(auth));
 
-    // Students and elements
-    const students=["Siyaam Azar","Hussain Ali","Hamza Razzaq","Subhan Hussain","Milad Raza","Murtaza Arfan","Zeeshan Hussain","Mohammed Subhan Ramzan","Onees Usman","Mohammed Hassan Hussain","Ali Hussein"];
+    // Global state
+    let currentUser = null;
+    let currentClassId = null;
+    let currentClassData = null;
+    let students = [];
     const MONTH_LABELS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const inputs={student:document.getElementById('student'),quran:document.getElementById('quran'),surah:document.getElementById('surah'),laws:document.getElementById('laws'),qamar:document.getElementById('qamar'),anything:document.getElementById('anything')};
     const filterStudent=document.getElementById('filterStudent');
@@ -267,6 +362,89 @@
     const reportInfo=document.getElementById('reportInfo');
     const reportDownload=document.getElementById('reportDownload');
 
+    // User and Class Management
+    async function createUserProfile(uid, email, className) {
+      const classId = generateClassId(className);
+      const userRef = doc(db, 'users', uid);
+      const classRef = doc(db, 'classes', classId);
+      
+      await setDoc(userRef, {
+        email: email,
+        classes: [classId],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      await setDoc(classRef, {
+        name: className,
+        owner: uid,
+        students: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    async function loadUserClasses(uid) {
+      const userRef = doc(db, 'users', uid);
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) return [];
+      
+      const userData = userSnap.data();
+      const classIds = userData.classes || [];
+      
+      const classPromises = classIds.map(async (classId) => {
+        const classRef = doc(db, 'classes', classId);
+        const classSnap = await getDoc(classRef);
+        if (classSnap.exists()) {
+          return { id: classId, ...classSnap.data() };
+        }
+        return null;
+      });
+      
+      const classes = await Promise.all(classPromises);
+      return classes.filter(c => c !== null);
+    }
+
+    async function createNewClassForUser(uid, className) {
+      const classId = generateClassId(className);
+      const userRef = doc(db, 'users', uid);
+      const classRef = doc(db, 'classes', classId);
+      
+      await setDoc(classRef, {
+        name: className,
+        owner: uid,
+        students: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      await setDoc(userRef, {
+        classes: arrayUnion(classId)
+      }, { merge: true });
+
+      return classId;
+    }
+
+    async function addStudentToClass(classId, studentName) {
+      const classRef = doc(db, 'classes', classId);
+      await setDoc(classRef, {
+        students: arrayUnion(studentName),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    }
+
+    async function removeStudentFromClass(classId, studentName) {
+      const classRef = doc(db, 'classes', classId);
+      await setDoc(classRef, {
+        students: arrayRemove(studentName),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    }
+
+    function generateClassId(className) {
+      return className.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Date.now();
+    }
+
     // Populate selects
     function populateStudents(){
       inputs.student.innerHTML='<option value="" disabled selected>Choose a student…</option>';
@@ -278,15 +456,19 @@
         const o3=document.createElement('option');o3.value=o.value;o3.textContent=n;reportStudent.appendChild(o3);
       });
     }
-    populateStudents();
 
     const now=new Date();
     const todayKey=toLocalISODate(now);
     document.getElementById('todayDisplay').textContent=formatDisplayDate(todayKey);
     if(reportMonth)reportMonth.value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 
-    const CLASS_ID='Attari';
-    const notesCol=collection(doc(db,'classes',CLASS_ID),'notes');
+    let notesCol = null;
+
+    function updateNotesCollection() {
+      if (currentClassId) {
+        notesCol = collection(doc(db, 'classes', currentClassId), 'notes');
+      }
+    }
 
     const slug=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
     const noteId=(date,student)=>`${date}_${slug(student)}`;
@@ -315,11 +497,173 @@
     }
     cancelEditBtn.addEventListener('click',()=>setEditMode(null));
 
+    // Class and Student Management Event Handlers
+    createNewClass?.addEventListener('click', () => {
+      createClassModal.classList.remove('hidden');
+    });
+
+    cancelCreateClass?.addEventListener('click', () => {
+      createClassModal.classList.add('hidden');
+      newClassName.value = '';
+    });
+
+    createClassForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const className = newClassName.value.trim();
+      if (!className || !currentUser) return;
+      
+      try {
+        const classId = await createNewClassForUser(currentUser.uid, className);
+        createClassModal.classList.add('hidden');
+        newClassName.value = '';
+        showToast('Class created successfully!', 'success');
+        await loadAndDisplayClasses();
+      } catch (error) {
+        showToast('Failed to create class', 'error');
+        console.error(error);
+      }
+    });
+
+    switchClassBtn?.addEventListener('click', () => {
+      showClassSelection();
+    });
+
+    manageStudentsBtn?.addEventListener('click', () => {
+      if (currentClassId) {
+        showStudentManagement();
+      }
+    });
+
+    closeStudentModal?.addEventListener('click', () => {
+      studentModal.classList.add('hidden');
+    });
+
+    addStudentForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const studentName = newStudentName.value.trim();
+      if (!studentName || !currentClassId) return;
+      
+      try {
+        await addStudentToClass(currentClassId, studentName);
+        newStudentName.value = '';
+        await loadCurrentClass();
+        updateStudentsDisplay();
+        populateStudents();
+        showToast('Student added successfully!', 'success');
+      } catch (error) {
+        showToast('Failed to add student', 'error');
+        console.error(error);
+      }
+    });
+
+    // Class and Student Display Functions
+    async function loadAndDisplayClasses() {
+      if (!currentUser) return;
+      
+      const classes = await loadUserClasses(currentUser.uid);
+      
+      if (classes.length === 0) {
+        classesList.innerHTML = '';
+        noClasses.classList.remove('hidden');
+        return;
+      }
+      
+      noClasses.classList.add('hidden');
+      classesList.innerHTML = classes.map(cls => `
+        <div class="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 hover:bg-slate-100/80 dark:hover:bg-slate-700/80 cursor-pointer transition-colors"
+             onclick="selectClass('${cls.id}', '${cls.name}')">
+          <h3 class="font-semibold text-lg mb-2">${esc(cls.name)}</h3>
+          <p class="text-sm text-slate-600 dark:text-slate-400">${cls.students?.length || 0} students</p>
+          <p class="text-xs text-slate-500 mt-1">Created: ${formatDisplayDate(cls.createdAt?.toDate?.() || new Date())}</p>
+        </div>
+      `).join('');
+    }
+
+    async function selectClass(classId, className) {
+      currentClassId = classId;
+      await loadCurrentClass();
+      currentClassName.textContent = className;
+      updateNotesCollection();
+      populateStudents();
+      showApp();
+      startHistoryStream();
+      
+      // Update footer
+      const footerClassId = document.getElementById('footerClassId');
+      if (footerClassId) {
+        footerClassId.textContent = classId;
+      }
+    }
+
+    async function loadCurrentClass() {
+      if (!currentClassId) return;
+      
+      const classRef = doc(db, 'classes', currentClassId);
+      const classSnap = await getDoc(classRef);
+      
+      if (classSnap.exists()) {
+        currentClassData = classSnap.data();
+        students = currentClassData.students || [];
+      }
+    }
+
+    function showClassSelection() {
+      appShell.classList.add('hidden');
+      classSelection.classList.remove('hidden');
+      if (unsub) unsub();
+      loadAndDisplayClasses();
+    }
+
+    function showApp() {
+      classSelection.classList.add('hidden');
+      appShell.classList.remove('hidden');
+    }
+
+    function showStudentManagement() {
+      studentModal.classList.remove('hidden');
+      updateStudentsDisplay();
+    }
+
+    function updateStudentsDisplay() {
+      if (!students.length) {
+        studentsList.innerHTML = '';
+        noStudents.classList.remove('hidden');
+        return;
+      }
+      
+      noStudents.classList.add('hidden');
+      studentsList.innerHTML = students.map(student => `
+        <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60">
+          <span class="font-medium">${esc(student)}</span>
+          <button onclick="removeStudent('${student}')" class="px-3 py-1 text-xs rounded-lg ring-1 ring-red-300 text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20">Remove</button>
+        </div>
+      `).join('');
+    }
+
+    window.removeStudent = async function(studentName) {
+      if (!confirm(`Remove ${studentName} from the class?`)) return;
+      
+      try {
+        await removeStudentFromClass(currentClassId, studentName);
+        await loadCurrentClass();
+        updateStudentsDisplay();
+        populateStudents();
+        showToast('Student removed successfully!', 'success');
+      } catch (error) {
+        showToast('Failed to remove student', 'error');
+        console.error(error);
+      }
+    };
+
+    window.selectClass = selectClass;
+
     // Save/Update
     document.getElementById('notesForm').addEventListener('submit',async(e)=>{
       e.preventDefault();
       const student=inputs.student.value;
       if(!student){saveStatus.textContent='Choose a student';return}
+      if(!currentClassId || !notesCol){saveStatus.textContent='No class selected';return}
+      
       saveSpinner.classList.remove('hidden');
       const defaultDate=toLocalISODate(new Date());
       const entryDate=editingKey?extractDateFromId(editingKey)||defaultDate:defaultDate;
@@ -335,7 +679,8 @@
         qamar:inputs.qamar.value.trim(),
         anythingElse:inputs.anything.value.trim(),
         updatedAt:serverTimestamp(),
-        ownerUid:auth.currentUser?.uid||null
+        ownerUid:auth.currentUser?.uid||null,
+        classId:currentClassId
       };
       const snap=await getDoc(ref);
       if(!snap.exists())payload.createdAt=serverTimestamp();
@@ -354,6 +699,7 @@
 
     function startHistoryStream(){
       if(unsub)unsub();
+      if(!notesCol || !currentClassId) return;
       const q=query(notesCol,orderBy('date','desc'),qLimit(200));
       unsub=onSnapshot(q,(snap)=>{
         historyRows=snap.docs.map(d=>({id:d.id,...d.data()}));
@@ -377,6 +723,7 @@
     document.getElementById('reload').addEventListener('click',applyFilters);
 
     async function fetchMonthlyRows(student,range){
+      if (!notesCol || !currentClassId) return [];
       const baseConstraints=[where('date','>=',range.start),where('date','<=',range.end),orderBy('date','asc')];
       const mapSnap=snap=>snap.docs.map(docSnap=>({id:docSnap.id,...docSnap.data()}));
       if(!student){
@@ -658,31 +1005,45 @@
     historyBody.addEventListener('click',async(e)=>{
       const btn=e.target.closest('button'); if(!btn) return;
       const id=btn.getAttribute('data-id');
+      if(!currentClassId || !notesCol) return;
+      
       if(btn.getAttribute('data-action')==='edit'){
-        const snap=await getDoc(doc(notesCol,id));
+        const noteRef = doc(notesCol, id);
+        const snap=await getDoc(noteRef);
         if(snap.exists()) setEditMode(snap.data());
       } else if(btn.getAttribute('data-action')==='delete'){
         if(!confirm('Delete this note?')) return;
-        await deleteDoc(doc(notesCol,id));
+        const noteRef = doc(notesCol, id);
+        await deleteDoc(noteRef);
         showToast('Deleted','success');
       }
     });
 
     // Auth gate
-    onAuthStateChanged(auth,(user)=>{
-      if(user){
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        currentUser = user;
         authGate.classList.add('hidden');
-        appShell.classList.remove('hidden');
-        whoami.textContent=user.email||user.uid;
-        authStatus.textContent='Online';
-        dot.className='w-2 h-2 rounded-full bg-emerald-400';
-        startHistoryStream();
+        whoami.textContent = user.email || user.uid;
+        authStatus.textContent = 'Online';
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+        
+        // Load user's classes and show class selection
+        showClassSelection();
       } else {
+        currentUser = null;
+        currentClassId = null;
+        currentClassData = null;
+        students = [];
+        
         appShell.classList.add('hidden');
+        classSelection.classList.add('hidden');
         authGate.classList.remove('hidden');
-        whoami.textContent='Not signed in';
-        authStatus.textContent='Signed out';
-        dot.className='w-2 h-2 rounded-full bg-amber-400';
+        whoami.textContent = 'Not signed in';
+        authStatus.textContent = 'Signed out';
+        dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+        
+        if (unsub) unsub();
       }
     });
 
