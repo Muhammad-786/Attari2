@@ -232,7 +232,7 @@
 
       <footer class="mt-12 text-center">
         <div class="glass bg-white/60 dark:bg-slate-800/60 rounded-2xl px-6 py-4 inline-block">
-          <p class="text-xs text-slate-600 dark:text-slate-400">🔒 Data: <span id="classPathLabel" class="font-mono font-semibold">classes/—</span> • Unique per <em>date + student</em></p>
+          <p class="text-xs text-slate-600 dark:text-slate-400">🔒 Data: <span id="classPathLabel" class="font-mono font-semibold">classes/—/notes</span> • Unique per <em>date + student</em></p>
         </div>
       </footer>
     </div>
@@ -399,16 +399,17 @@
     }
 
     function updateClassPathLabelText(classId){
-      if(classPathLabel)classPathLabel.textContent=classId?`classes/${classId}/notes`:'classes/—';
+      if(classPathLabel)classPathLabel.textContent=classId?`classes/${classId}/notes`:'classes/—/notes';
     }
 
     function updateClassHint(classId,className=''){
       if(!classHint)return;
       if(classId){
         const nameHtml=className?`<span class="font-semibold">${esc(className)}</span> • `:'';
-        classHint.innerHTML=`${nameHtml}Class code: <span class="font-mono font-semibold">${esc(classId)}</span> • Data path <span class="font-mono">classes/${esc(classId)}/notes</span>`;
+        const rulesHtml=`<span class="block text-[0.7rem] text-slate-500 dark:text-slate-400 mt-1">Firestore rule: <span class="font-mono">match /classes/{classId}/notes/{noteId}</span></span>`;
+        classHint.innerHTML=`${nameHtml}Class code: <span class="font-mono font-semibold">${esc(classId)}</span> • Data path <span class="font-mono">classes/${esc(classId)}/notes</span>${rulesHtml}`;
       }else{
-        classHint.textContent='Create or join a class to manage its own notes database.';
+        classHint.innerHTML='Create or join a class to manage its own notes database.<span class="block text-[0.7rem] text-slate-500 dark:text-slate-400 mt-1">Firestore rule: <span class="font-mono">match /classes/{classId}/notes/{noteId}</span></span>';
       }
     }
 
@@ -461,7 +462,8 @@
     // Save/Update
     notesForm.addEventListener('submit',async(e)=>{
       e.preventDefault();
-      if(!currentClassId||!notesColRef){
+      const notesRef=getClassNotesCollection();
+      if(!currentClassId||!notesRef){
         saveStatus.textContent='Select a class first';
         showToast('Select a class before saving.','error');
         return;
@@ -474,7 +476,7 @@
         const defaultDate=toLocalISODate(new Date());
         const entryDate=editingKey?extractDateFromId(editingKey)||defaultDate:defaultDate;
         const id=editingKey||noteId(entryDate,student);
-        const ref=doc(notesColRef,id);
+        const ref=doc(notesRef,id);
         const payload={
           id,
           date:entryDate,
@@ -508,7 +510,6 @@
     let currentUser=null;
     let currentClassId=null;
     let currentClassName='';
-    let notesColRef=null;
     let classesUnsub=null;
     let classDocUnsub=null;
     let unsub=null;
@@ -524,18 +525,27 @@
     let lastClassRows=[];
     let historySnapshotToken=0;
 
+    function getClassDocRef(classId=currentClassId){
+      return classId?doc(db,'classes',classId):null;
+    }
+
+    function getClassNotesCollection(classId=currentClassId){
+      const classRef=getClassDocRef(classId);
+      return classRef?collection(classRef,'notes'):null;
+    }
+
     function startHistoryStream(){
       if(unsub)unsub();
       historyRows=[];
       lastClassRows=[];
       renderHistory([]);
-      if(!notesColRef)return;
-      const q=query(notesColRef,orderBy('date','desc'),qLimit(200));
-      unsub=onSnapshot(q,async(snap)=>{
-        const token=++historySnapshotToken;
-        const baseRows=snap.docs.map(d=>({id:d.id,__docPath:d.ref.path,__source:'class',...d.data()}));
-        lastClassRows=baseRows;
-        historyRows=mergeNoteRows(baseRows,legacyNotesCache,'desc');
+
+      const notesRef=getClassNotesCollection();
+      if(!notesRef)return;
+      const q=query(notesRef,orderBy('date','desc'),qLimit(200));
+      unsub=onSnapshot(q,(snap)=>{
+        historyRows=snap.docs.map(d=>({id:d.id,...d.data()}));
+
         applyFilters();
         try{
           const legacyRows=await ensureLegacyNotesLoaded();
@@ -650,7 +660,7 @@
     }
 
     function applyFilters(){
-      if(!notesColRef){
+      if(!getClassNotesCollection()){
         renderHistory([]);
         return;
       }
@@ -668,39 +678,30 @@
     document.getElementById('reload').addEventListener('click',applyFilters);
 
     async function fetchMonthlyRows(student,range){
-      if(!notesColRef)return [];
+      const notesRef=getClassNotesCollection();
+      if(!notesRef)return [];
       const baseConstraints=[where('date','>=',range.start),where('date','<=',range.end),orderBy('date','asc')];
       const mapSnap=snap=>snap.docs.map(docSnap=>({id:docSnap.id,__docPath:docSnap.ref.path,__source:'class',...docSnap.data()}));
       let classRows=[];
       if(!student){
-        const snap=await getDocs(query(notesColRef,...baseConstraints));
-        classRows=mapSnap(snap);
-      }else{
-        try{
-          const snap=await getDocs(query(notesColRef,where('student','==',student),...baseConstraints));
-          classRows=mapSnap(snap);
-        }catch(err){
-          // fallback if composite index is missing
-          if(err?.code==='failed-precondition'||/index/i.test(err?.message||'')){
-            const snap=await getDocs(query(notesColRef,...baseConstraints));
-            classRows=mapSnap(snap).filter(r=>r.student===student);
-          }else{
-            throw err;
-          }
-        }
+
+        const snap=await getDocs(query(notesRef,...baseConstraints));
+        return mapSnap(snap);
+
       }
       let legacyRows=[];
       try{
-        const allLegacy=await ensureLegacyNotesLoaded();
-        legacyRows=(allLegacy||[]).filter(r=>{
-          const dateStr=toLocalISODate(r?.date);
-          if(!dateStr)return false;
-          if(dateStr<range.start||dateStr>range.end)return false;
-          if(student&&r.student!==student)return false;
-          return true;
-        });
+
+        const snap=await getDocs(query(notesRef,where('student','==',student),...baseConstraints));
+        return mapSnap(snap);
       }catch(err){
-        console.error('Failed to include legacy notes in monthly rows',err);
+        // fallback if composite index is missing
+        if(err?.code==='failed-precondition'||/index/i.test(err?.message||'')){
+          const snap=await getDocs(query(notesRef,...baseConstraints));
+          return mapSnap(snap).filter(r=>r.student===student);
+        }
+        throw err;
+
       }
       return mergeNoteRows(classRows,legacyRows,'asc');
     }
@@ -777,7 +778,7 @@
       reportTableWrapper.classList.add('hidden');
       reportEmpty.classList.remove('hidden');
 
-      if(!notesColRef){
+      if(!getClassNotesCollection()){
         reportEmptyText.textContent='Select a class to see monthly reports.';
         return;
       }
@@ -835,7 +836,7 @@
     }
 
     async function downloadMonthlyReport(){
-      if(!notesColRef||!currentReportRows.length||!reportStudent||!reportMonth||!reportDownload)return;
+      if(!getClassNotesCollection()||!currentReportRows.length||!reportStudent||!reportMonth||!reportDownload)return;
       const student=reportStudent.value;
       const monthValue=reportMonth.value;
       if(!student||!monthValue)return;
@@ -1072,7 +1073,6 @@
     function resetAppState(){
       if(unsub){unsub();unsub=null;}
       if(classDocUnsub){classDocUnsub();classDocUnsub=null;}
-      notesColRef=null;
       currentClassId=null;
       currentClassName='';
       userClasses=[];
@@ -1108,7 +1108,6 @@
       historySnapshotToken=0;
       currentClassId=classId||null;
       currentClassName='';
-      notesColRef=null;
       historyRows=[];
       currentReportRows=[];
       reportInfo.textContent='';
@@ -1131,8 +1130,7 @@
       if(classSelect&&classSelect.value!==currentClassId){
         classSelect.value=currentClassId;
       }
-      const classRef=doc(db,'classes',currentClassId);
-      notesColRef=collection(classRef,'notes');
+      const classRef=getClassDocRef(currentClassId);
       setEditMode(null);
       setFormDisabled(false);
       updateClassStatus('Loading class…');
@@ -1237,13 +1235,15 @@
     }
 
     async function maybeLoadTodaysEntry(student){
-      if(!student||!notesColRef)return;
+      if(!student)return;
+      const notesRef=getClassNotesCollection();
+      if(!notesRef)return;
       const expectedClassId=currentClassId;
       const selectionToken=student;
       const today=toLocalISODate(new Date());
       const id=noteId(today,student);
       try{
-        const snap=await getDoc(doc(notesColRef,id));
+        const snap=await getDoc(doc(notesRef,id));
         if(currentClassId!==expectedClassId)return;
         if(inputs.student.value!==selectionToken)return;
         if(snap.exists()){
@@ -1262,57 +1262,19 @@
     }
 
     historyBody.addEventListener('click',async(e)=>{
-      const btn=e.target.closest('button'); if(!btn)return;
-      const action=btn.getAttribute('data-action'); if(!action)return;
-      if(!currentClassId)return;
+
+      const btn=e.target.closest('button'); if(!btn) return;
+      const notesRef=getClassNotesCollection();
+      if(!notesRef)return;
       const id=btn.getAttribute('data-id');
-      const path=btn.getAttribute('data-path');
-      const source=btn.getAttribute('data-source')||'class';
-      let targetRef=path?docFromPath(path):null;
-      if(!targetRef&&notesColRef&&id){
-        targetRef=doc(notesColRef,id);
-      }
-      if(!targetRef||!id)return;
-      if(action==='edit'){
-        let snap;
-        try{
-          snap=await getDoc(targetRef);
-        }catch(err){
-          console.error('Failed to load note for editing',err);
-          snap=null;
-        }
-        if(!snap?.exists()&&source==='legacy'&&notesColRef){
-          try{
-            const fallbackSnap=await getDoc(doc(notesColRef,id));
-            if(fallbackSnap.exists())snap=fallbackSnap;
-          }catch(err){
-            console.error('Failed to load migrated note',err);
-          }
-        }
-        if(snap?.exists())setEditMode({id:snap.id,...snap.data()});
-      }else if(action==='delete'){
-        if(!confirm('Delete this note?'))return;
-        let deleted=false;
-        try{
-          await deleteDoc(targetRef);
-          deleted=true;
-        }catch(err){
-          console.error('Failed to delete note',err);
-        }
-        if(!deleted&&notesColRef){
-          try{
-            await deleteDoc(doc(notesColRef,id));
-            deleted=true;
-          }catch(err){
-            console.error('Failed to delete note from class collection',err);
-          }
-        }
-        if(source==='legacy'&&deleted){
-          legacyNotesCache=legacyNotesCache.filter(r=>r.id!==id);
-          historyRows=historyRows.filter(r=>r.id!==id);
-          applyFilters();
-        }
-        if(deleted)showToast('Deleted','success');
+      if(btn.getAttribute('data-action')==='edit'){
+        const snap=await getDoc(doc(notesRef,id));
+        if(snap.exists()) setEditMode({id:snap.id,...snap.data()});
+      } else if(btn.getAttribute('data-action')==='delete'){
+        if(!confirm('Delete this note?')) return;
+        await deleteDoc(doc(notesRef,id));
+        showToast('Deleted','success');
+
       }
     });
 
