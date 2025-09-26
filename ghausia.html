@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ghausia — Class Track</title>
+  <script>
+    // Suppress Tailwind CDN warning
+    window.process = { env: { NODE_ENV: 'development' } };
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -943,14 +947,26 @@
         ownerUid:auth.currentUser?.uid||null,
         classId:currentClassId
       };
-      const snap=await getDoc(ref);
-      if(!snap.exists())payload.createdAt=serverTimestamp();
-      await setDoc(ref,payload,{merge:true});
-      saveSpinner.classList.add('hidden');
-      showToast(editingKey?'Updated ✓':'Saved ✓','success');
-      saveStatus.textContent=editingKey?'Updated ✅':'Saved ✅';
-      setTimeout(()=>saveStatus.textContent='',1200);
-      setEditMode(null);
+      try {
+        const snap=await getDoc(ref);
+        if(!snap.exists())payload.createdAt=serverTimestamp();
+        await setDoc(ref,payload,{merge:true});
+        saveSpinner.classList.add('hidden');
+        showToast(editingKey?'Updated ✓':'Saved ✓','success');
+        saveStatus.textContent=editingKey?'Updated ✅':'Saved ✅';
+        setTimeout(()=>saveStatus.textContent='',1200);
+        setEditMode(null);
+      } catch (error) {
+        saveSpinner.classList.add('hidden');
+        console.error('Error saving entry:', error);
+        if (error.code === 'permission-denied') {
+          saveStatus.textContent='Permission denied';
+          showToast('Permission denied. Please check your access rights.', 'error');
+        } else {
+          saveStatus.textContent='Save failed';
+          showToast('Failed to save entry', 'error');
+        }
+      }
     });
 
     // History stream & filters
@@ -966,6 +982,13 @@
         historyRows=snap.docs.map(d=>({id:d.id,...d.data()}));
         applyFilters();
         renderMonthlyReport();
+      }, (error) => {
+        console.error('Error listening to notes:', error);
+        if (error.code === 'permission-denied') {
+          showToast('Permission denied. Please check your access rights.', 'error');
+        } else {
+          showToast('Error loading notes. Please refresh the page.', 'error');
+        }
       });
     }
 
