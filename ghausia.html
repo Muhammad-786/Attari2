@@ -473,24 +473,45 @@
     }
 
     async function loadUserClasses(uid) {
-      const userRef = doc(db, 'users', uid);
-      const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) return [];
-      
-      const userData = userSnap.data();
-      const classIds = userData.classes || [];
-      
-      const classPromises = classIds.map(async (classId) => {
-        const classRef = doc(db, 'classes', classId);
-        const classSnap = await getDoc(classRef);
-        if (classSnap.exists()) {
-          return { id: classId, ...classSnap.data() };
+      try {
+        const userRef = doc(db, 'users', uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (!userSnap.exists()) {
+          console.log('User document does not exist for uid:', uid);
+          return [];
         }
-        return null;
-      });
-      
-      const classes = await Promise.all(classPromises);
-      return classes.filter(c => c !== null);
+        
+        const userData = userSnap.data();
+        const classIds = userData.classes || [];
+        
+        if (classIds.length === 0) {
+          console.log('No classes found for user:', uid);
+          return [];
+        }
+        
+        const classPromises = classIds.map(async (classId) => {
+          try {
+            const classRef = doc(db, 'classes', classId);
+            const classSnap = await getDoc(classRef);
+            if (classSnap.exists()) {
+              return { id: classId, ...classSnap.data() };
+            }
+            console.log('Class document does not exist:', classId);
+            return null;
+          } catch (error) {
+            console.error('Error loading class:', classId, error);
+            return null;
+          }
+        });
+        
+        const classes = await Promise.all(classPromises);
+        return classes.filter(c => c !== null);
+      } catch (error) {
+        console.error('Error loading user classes:', error);
+        showToast('Error loading classes', 'error');
+        return [];
+      }
     }
 
 
@@ -736,16 +757,26 @@
 
     // Class and Student Display Functions
     async function loadAndDisplayClasses() {
-      if (!currentUser) return;
+      if (!currentUser) {
+        console.log('No current user, cannot load classes');
+        return;
+      }
+      
+      console.log('Loading classes for user:', currentUser.uid);
+      
+      // Add a small delay to ensure authentication is fully processed
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       const classes = await loadUserClasses(currentUser.uid);
       
       if (classes.length === 0) {
+        console.log('No classes found, showing no classes screen');
         classesList.innerHTML = '';
         noClasses.classList.remove('hidden');
         return;
       }
       
+      console.log('Found', classes.length, 'classes');
       // Automatically select the first (and only) class
       const firstClass = classes[0];
       await selectClass(firstClass.id, firstClass.name);
@@ -976,16 +1007,26 @@
 
     function startHistoryStream(){
       if(unsub)unsub();
-      if(!notesCol || !currentClassId) return;
+      if(!notesCol || !currentClassId || !currentUser) {
+        console.log('Cannot start history stream - missing requirements:', {
+          notesCol: !!notesCol,
+          currentClassId: !!currentClassId,
+          currentUser: !!currentUser
+        });
+        return;
+      }
+      
+      console.log('Starting history stream for class:', currentClassId);
       const q=query(notesCol,orderBy('date','desc'),qLimit(200));
       unsub=onSnapshot(q,(snap)=>{
+        console.log('Received notes snapshot with', snap.docs.length, 'documents');
         historyRows=snap.docs.map(d=>({id:d.id,...d.data()}));
         applyFilters();
         renderMonthlyReport();
       }, (error) => {
         console.error('Error listening to notes:', error);
         if (error.code === 'permission-denied') {
-          showToast('Permission denied. Please check your access rights.', 'error');
+          showToast('Permission denied. Please check database rules.', 'error');
         } else {
           showToast('Error loading notes. Please refresh the page.', 'error');
         }
@@ -1305,29 +1346,40 @@
 
     // Auth gate
     onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        currentUser = user;
-        authGate.classList.add('hidden');
-        whoami.textContent = user.email || user.uid;
-        authStatus.textContent = 'Online';
-        dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
-        
-        // Load user's class and go directly to app
-        await loadAndDisplayClasses();
-      } else {
-        currentUser = null;
-        currentClassId = null;
-        currentClassData = null;
-        students = [];
-        
-        appShell.classList.add('hidden');
-        classSelection.classList.add('hidden');
-        authGate.classList.remove('hidden');
-        whoami.textContent = 'Not signed in';
-        authStatus.textContent = 'Signed out';
-        dot.className = 'w-2 h-2 rounded-full bg-amber-400';
-        
-        if (unsub) unsub();
+      try {
+        if (user) {
+          console.log('User authenticated:', user.email);
+          currentUser = user;
+          authGate.classList.add('hidden');
+          whoami.textContent = user.email || user.uid;
+          authStatus.textContent = 'Online';
+          dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+          
+          // Add a small delay to ensure Firebase is fully initialized
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          // Load user's class and go directly to app
+          await loadAndDisplayClasses();
+        } else {
+          console.log('User signed out');
+          currentUser = null;
+          currentClassId = null;
+          currentClassData = null;
+          students = [];
+          
+          appShell.classList.add('hidden');
+          classSelection.classList.add('hidden');
+          authGate.classList.remove('hidden');
+          whoami.textContent = 'Not signed in';
+          authStatus.textContent = 'Signed out';
+          dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+          
+          if (unsub) unsub();
+        }
+      } catch (error) {
+        console.error('Error in auth state change:', error);
+        authStatus.textContent = 'Error loading';
+        dot.className = 'w-2 h-2 rounded-full bg-red-400';
       }
     });
 
