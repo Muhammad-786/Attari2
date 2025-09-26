@@ -246,7 +246,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
-    import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, updateDoc, query, orderBy, where, onSnapshot, serverTimestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+    import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, updateDoc, query, orderBy, where, limit as qLimit, onSnapshot, serverTimestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
 
     const firebaseConfig = { apiKey:"AIzaSyCTGIoNNey_0GwRxg_85Xv-jEQtQDjzehw", authDomain:"attari-579d2.firebaseapp.com", projectId:"attari-579d2", storageBucket:"attari-579d2.firebasestorage.app", messagingSenderId:"765966619098", appId:"1:765966619098:web:9ab852c4881426472b70e3" };
 
@@ -390,7 +390,8 @@
         if(sorted.length){
           studentsChips.innerHTML=sorted.map(name=>`<span class="px-3 py-1 rounded-full bg-slate-200/70 dark:bg-slate-800/70">${esc(name)}</span>`).join('');
         }else{
-          const emptyLabel=classActive?'No students yet — use “Add student” after signing in.':'No class selected.';
+          const emptyLabel=classActive?'No students yet.':'No class selected.';
+
           studentsChips.innerHTML=`<span class="px-3 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800/60">${esc(emptyLabel)}</span>`;
         }
       }
@@ -432,17 +433,14 @@
     }
 
     function updateClassPathLabelText(classId){
-      if(classPathLabel){
-        const suffix=classId?` • class ${classId}`:'';
-        classPathLabel.textContent=`classes/${ROOT_CLASS_DOCUMENT_ID}/notes${suffix}`;
-      }
+      if(classPathLabel)classPathLabel.textContent=classId?`classes/${classId}/notes`:'classes/—';
     }
 
     function updateClassHint(classId,className=''){
       if(!classHint)return;
       if(classId){
         const nameHtml=className?`<span class="font-semibold">${esc(className)}</span> • `:'';
-        classHint.innerHTML=`${nameHtml}Class code: <span class="font-mono font-semibold">${esc(classId)}</span> • Data path <span class="font-mono">classes/${esc(ROOT_CLASS_DOCUMENT_ID)}/notes</span> • Share this code with co-teachers to let them join.`;
+        classHint.innerHTML=`${nameHtml}Class code: <span class="font-mono font-semibold">${esc(classId)}</span> • Data path <span class="font-mono">classes/${esc(classId)}/notes</span>`;
       }else{
         classHint.textContent='Create or join a class to manage its own notes database.';
       }
@@ -502,7 +500,7 @@
     // Save/Update
     notesForm.addEventListener('submit',async(e)=>{
       e.preventDefault();
-      if(!currentClassId){
+      if(!currentClassId||!notesColRef){
         saveStatus.textContent='Select a class first';
         showToast('Select a class before saving.','error');
         return;
@@ -514,12 +512,11 @@
       try{
         const defaultDate=toLocalISODate(new Date());
         const entryDate=editingKey?extractDateFromId(editingKey)||defaultDate:defaultDate;
-        const id=editingKey||noteId(currentClassId,entryDate,student);
+        const id=editingKey||noteId(entryDate,student);
         const ref=doc(notesColRef,id);
         const payload={
           id,
-          classId:currentClassId,
-          className:currentClassName||'',
+
           date:entryDate,
           student,
           quran:inputs.quran.value.trim(),
@@ -528,8 +525,8 @@
           qamar:inputs.qamar.value.trim(),
           anythingElse:inputs.anything.value.trim(),
           updatedAt:serverTimestamp(),
-          ownerUid:auth.currentUser?.uid||null,
-          type:'note'
+
+          ownerUid:auth.currentUser?.uid||null
         };
         const snap=await getDoc(ref);
         if(!snap.exists())payload.createdAt=serverTimestamp();
@@ -552,6 +549,9 @@
     let currentUser=null;
     let currentClassId=null;
     let currentClassName='';
+
+    let notesColRef=null;
+
     let classesUnsub=null;
     let classDocUnsub=null;
     let unsub=null;
@@ -560,14 +560,15 @@
     let reportRequestToken=0;
     let jsPdfModulePromise=null;
     let userClasses=[];
-    let preferredClassAfterCreation=null;
 
     function startHistoryStream(){
       if(unsub)unsub();
       historyRows=[];
       renderHistory([]);
-      if(!currentClassId)return;
-      const q=query(notesColRef,where('classId','==',currentClassId));
+
+      if(!notesColRef)return;
+      const q=query(notesColRef,orderBy('date','desc'),qLimit(200));
+
       unsub=onSnapshot(q,(snap)=>{
         historyRows=snap.docs
           .map(d=>{
@@ -597,7 +598,9 @@
     }
 
     function applyFilters(){
-      if(!currentClassId){
+
+      if(!notesColRef){
+
         renderHistory([]);
         return;
       }
@@ -615,41 +618,25 @@
     document.getElementById('reload').addEventListener('click',applyFilters);
 
     async function fetchMonthlyRows(student,range){
-      if(!currentClassId)return [];
-      const baseConstraints=[
-        where('classId','==',currentClassId),
-        where('date','>=',range.start),
-        where('date','<=',range.end),
-        orderBy('date','asc')
-      ];
-      const mapSnap=snap=>snap.docs.map(docSnap=>{
-        const data={id:docSnap.id,...docSnap.data()};
-        if(!data.classId&&currentClassId&&currentUser&&data.ownerUid===currentUser.uid){
-          data.classId=currentClassId;
-        }
-        return data;
-      });
-      const indexError=err=>err?.code==='failed-precondition'||/index/i.test(err?.message||'');
+
+      if(!notesColRef)return [];
+      const baseConstraints=[where('date','>=',range.start),where('date','<=',range.end),orderBy('date','asc')];
+      const mapSnap=snap=>snap.docs.map(docSnap=>({id:docSnap.id,...docSnap.data()}));
       if(!student){
-        try{
-          const snap=await getDocs(query(notesColRef,...baseConstraints));
-          return mapSnap(snap);
-        }catch(err){
-          if(indexError(err)){
-            const snap=await getDocs(query(notesColRef,where('classId','==',currentClassId)));
-            return mapSnap(snap).filter(r=>r.date>=range.start&&r.date<=range.end);
-          }
-          throw err;
-        }
+        const snap=await getDocs(query(notesColRef,...baseConstraints));
+        return mapSnap(snap);
+
       }
       try{
         const snap=await getDocs(query(notesColRef,where('student','==',student),...baseConstraints));
         return mapSnap(snap);
       }catch(err){
         // fallback if composite index is missing
-        if(indexError(err)){
-          const snap=await getDocs(query(notesColRef,where('classId','==',currentClassId)));
-          return mapSnap(snap).filter(r=>r.student===student&&r.date>=range.start&&r.date<=range.end);
+
+        if(err?.code==='failed-precondition'||/index/i.test(err?.message||'')){
+          const snap=await getDocs(query(notesColRef,...baseConstraints));
+          return mapSnap(snap).filter(r=>r.student===student);
+
         }
         throw err;
       }
@@ -727,7 +714,9 @@
       reportTableWrapper.classList.add('hidden');
       reportEmpty.classList.remove('hidden');
 
-      if(!currentClassId){
+
+      if(!notesColRef){
+
         reportEmptyText.textContent='Select a class to see monthly reports.';
         return;
       }
@@ -785,7 +774,9 @@
     }
 
     async function downloadMonthlyReport(){
-      if(!currentClassId||!currentReportRows.length||!reportStudent||!reportMonth||!reportDownload)return;
+
+      if(!notesColRef||!currentReportRows.length||!reportStudent||!reportMonth||!reportDownload)return;
+
       const student=reportStudent.value;
       const monthValue=reportMonth.value;
       if(!student||!monthValue)return;
@@ -992,22 +983,18 @@
         setCurrentClass(null);
         return;
       }
-      const classesQuery=query(notesColRef,where('members','array-contains',uid));
+
+      const classesRef=collection(db,'classes');
+      const classesQuery=query(classesRef,where('members','array-contains',uid));
       classesUnsub=onSnapshot(classesQuery,(snap)=>{
-        userClasses=snap.docs
-          .map(docSnap=>({id:docSnap.id,...docSnap.data()}))
-          .filter(cls=>Array.isArray(cls.members))
-          .sort((a,b)=>{
-            const nameA=(a.name||a.id||'').toLowerCase();
-            const nameB=(b.name||b.id||'').toLowerCase();
-            return nameA.localeCompare(nameB);
-          });
+        userClasses=snap.docs.map(docSnap=>({id:docSnap.id,...docSnap.data()})).sort((a,b)=>{
+          const nameA=(a.name||a.id||'').toLowerCase();
+          const nameB=(b.name||b.id||'').toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
         const availableIds=userClasses.map(c=>c.id);
         let desired=null;
-        if(preferredClassAfterCreation&&availableIds.includes(preferredClassAfterCreation)){
-          desired=preferredClassAfterCreation;
-          preferredClassAfterCreation=null;
-        }
+
         if(currentClassId&&availableIds.includes(currentClassId)){
           desired=currentClassId;
         }else if(availableIds.length){
@@ -1028,6 +1015,9 @@
     function resetAppState(){
       if(unsub){unsub();unsub=null;}
       if(classDocUnsub){classDocUnsub();classDocUnsub=null;}
+
+      notesColRef=null;
+
       currentClassId=null;
       currentClassName='';
       userClasses=[];
@@ -1042,7 +1032,7 @@
       filterDate.value='';
       if(reportStudent)reportStudent.value='';
       pendingStudentSelection=null;
-      preferredClassAfterCreation=null;
+
       setEditMode(null);
       populateStudents([]);
       setFormDisabled(true);
@@ -1058,6 +1048,9 @@
       if(classDocUnsub){classDocUnsub();classDocUnsub=null;}
       currentClassId=classId||null;
       currentClassName='';
+
+      notesColRef=null;
+
       historyRows=[];
       currentReportRows=[];
       reportInfo.textContent='';
@@ -1080,7 +1073,10 @@
       if(classSelect&&classSelect.value!==currentClassId){
         classSelect.value=currentClassId;
       }
-      const classRef=doc(notesColRef,currentClassId);
+
+      const classRef=doc(db,'classes',currentClassId);
+      notesColRef=collection(classRef,'notes');
+
       setEditMode(null);
       setFormDisabled(false);
       updateClassStatus('Loading class…');
@@ -1096,14 +1092,9 @@
         currentClassName=data.name||currentClassId;
         updateClassStatus(`Working in ${currentClassName}`);
         updateClassHint(currentClassId,currentClassName);
-        const members=Array.isArray(data.members)?data.members:[];
-        if(currentUser&&!members.includes(currentUser.uid)){
-          updateClassStatus('You no longer have access to this class.');
-          populateStudents([]);
-          setFormDisabled(true);
-          return;
-        }
-        populateStudents(Array.isArray(data.students)?data.students:[]);
+
+        populateStudents(data.students||[]);
+
       },(err)=>{
         console.error('Failed to load class',err);
         showToast('Unable to load class','error');
@@ -1114,23 +1105,7 @@
       renderMonthlyReport();
     }
 
-    async function createClassForUser(user,className,{select=true}={}){
-      if(!user)throw new Error('Sign in required.');
-      const trimmed=className?.trim();
-      if(!trimmed)throw new Error('Class name is required.');
-      const classRef=doc(notesColRef);
-      const payload={
-        name:trimmed,
-        createdAt:serverTimestamp(),
-        ownerUid:user.uid||null,
-        members:[user.uid],
-        students:[],
-        type:'class'
-      };
-      await setDoc(classRef,payload);
-      if(select)preferredClassAfterCreation=classRef.id;
-      return {id:classRef.id,name:trimmed};
-    }
+
 
     async function handleCreateClass(){
       if(!currentUser){showToast('Sign in to create a class.','error');return;}
@@ -1138,19 +1113,24 @@
       if(name===null)return;
       const trimmed=name.trim();
       if(!trimmed){showToast('Class name is required.','error');return;}
-      const existing=userClasses.find(c=>(c.name||'').toLowerCase()===trimmed.toLowerCase());
-      if(existing){
-        setCurrentClass(existing.id);
-        showToast('Switched to existing class ✓','success');
-        return;
-      }
+
+      const id=slug(trimmed);
+      if(!id){showToast('Class name must include letters or numbers.','error');return;}
+      const classRef=doc(db,'classes',id);
       try{
-        const created=await createClassForUser(currentUser,trimmed);
-        showToast('Class created ✓','success');
-        setCurrentClass(created.id);
+        const snap=await getDoc(classRef);
+        if(snap.exists()){
+          await updateDoc(classRef,{members:arrayUnion(currentUser.uid),name:snap.data()?.name||trimmed});
+          showToast('Joined existing class ✓','success');
+        }else{
+          await setDoc(classRef,{name:trimmed,createdAt:serverTimestamp(),ownerUid:currentUser.uid,members:[currentUser.uid],students:[]});
+          showToast('Class created ✓','success');
+        }
+        setCurrentClass(id);
       }catch(err){
         console.error(err);
-        showToast(err?.message||'Unable to create class','error');
+        showToast('Unable to create class','error');
+
       }
     }
 
@@ -1160,28 +1140,29 @@
       if(code===null)return;
       const trimmed=code.trim();
       if(!trimmed){showToast('Class code is required.','error');return;}
-      const classRef=doc(notesColRef,trimmed);
-      const snap=await getDoc(classRef);
+
+      let classId=trimmed;
+      let classRef=doc(db,'classes',classId);
+      let snap=await getDoc(classRef);
+      if(!snap.exists()){
+        const normalized=slug(trimmed);
+        if(normalized){
+          classId=normalized;
+          classRef=doc(db,'classes',classId);
+          snap=await getDoc(classRef);
+        }
+      }
       if(!snap.exists()){
         showToast('Class not found.','error');
-        return;
-      }
-      const data=snap.data();
-      if(data?.type&&data.type!=='class'){
-        showToast('Class code is not valid.','error');
-        return;
-      }
-      const members=Array.isArray(data?.members)?data.members:[];
-      if(members.includes(currentUser.uid)){
-        showToast('You already joined this class.','success');
-        setCurrentClass(classRef.id);
+
         return;
       }
       try{
         await updateDoc(classRef,{members:arrayUnion(currentUser.uid)});
         showToast('Joined class ✓','success');
-        preferredClassAfterCreation=classRef.id;
-        setCurrentClass(classRef.id);
+
+        setCurrentClass(classId);
+
       }catch(err){
         console.error(err);
         showToast('Unable to join class.','error');
@@ -1198,7 +1179,9 @@
         showToast('Student already exists.','error');
         return;
       }
-      const classRef=doc(notesColRef,currentClassId);
+
+      const classRef=doc(db,'classes',currentClassId);
+
       try{
         pendingStudentSelection=trimmed;
         await updateDoc(classRef,{students:arrayUnion(trimmed)});
@@ -1210,27 +1193,19 @@
     }
 
     async function maybeLoadTodaysEntry(student){
-      if(!student||!currentClassId)return;
+
+      if(!student||!notesColRef)return;
       const expectedClassId=currentClassId;
       const selectionToken=student;
       const today=toLocalISODate(new Date());
-      const id=noteId(expectedClassId,today,student);
+      const id=noteId(today,student);
       try{
-        let snap=await getDoc(doc(notesColRef,id));
-        if(!snap.exists()){
-          const legacyId=legacyNoteId(today,student);
-          if(legacyId&&legacyId!==id){
-            snap=await getDoc(doc(notesColRef,legacyId));
-          }
-        }
+        const snap=await getDoc(doc(notesColRef,id));
         if(currentClassId!==expectedClassId)return;
         if(inputs.student.value!==selectionToken)return;
         if(snap.exists()){
-          const data=snap.data();
-          if(data&&!data.classId&&currentClassId){
-            updateDoc(doc(notesColRef,snap.id),{classId:currentClassId,type:'note'}).catch(err=>console.warn('Failed to backfill classId',err));
-          }
-          setEditMode({...data,id:snap.id});
+          setEditMode({...snap.data(),id:snap.id});
+
         }else if(editingKey){
           setEditMode(null,{preserveStudent:true});
         }
@@ -1241,17 +1216,13 @@
 
     historyBody.addEventListener('click',async(e)=>{
       const btn=e.target.closest('button'); if(!btn) return;
-      if(!currentClassId)return;
+
+      if(!notesColRef)return;
       const id=btn.getAttribute('data-id');
       if(btn.getAttribute('data-action')==='edit'){
         const snap=await getDoc(doc(notesColRef,id));
-        if(snap.exists()){
-          const data=snap.data();
-          if(data&&!data.classId&&currentClassId){
-            updateDoc(doc(notesColRef,id),{classId:currentClassId,type:'note'}).catch(err=>console.warn('Failed to backfill classId',err));
-          }
-          setEditMode({id:snap.id,...data});
-        }
+        if(snap.exists()) setEditMode({id:snap.id,...snap.data()});
+
       } else if(btn.getAttribute('data-action')==='delete'){
         if(!confirm('Delete this note?')) return;
         await deleteDoc(doc(notesColRef,id));
