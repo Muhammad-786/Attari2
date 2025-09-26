@@ -518,6 +518,12 @@
     let reportRequestToken=0;
     let jsPdfModulePromise=null;
     let userClasses=[];
+    const legacyNotesRef=collection(db,'classes','Attari','notes');
+    let legacyNotesCache=[];
+    let legacyNotesPromise=null;
+    let legacyNotesClassId=null;
+    let lastClassRows=[];
+    let historySnapshotToken=0;
 
     function getClassDocRef(classId=currentClassId){
       return classId?doc(db,'classes',classId):null;
@@ -531,15 +537,126 @@
     function startHistoryStream(){
       if(unsub)unsub();
       historyRows=[];
+      lastClassRows=[];
       renderHistory([]);
+
       const notesRef=getClassNotesCollection();
       if(!notesRef)return;
       const q=query(notesRef,orderBy('date','desc'),qLimit(200));
       unsub=onSnapshot(q,(snap)=>{
         historyRows=snap.docs.map(d=>({id:d.id,...d.data()}));
+
         applyFilters();
-        renderMonthlyReport();
+        try{
+          const legacyRows=await ensureLegacyNotesLoaded();
+          if(token!==historySnapshotToken)return;
+          historyRows=mergeNoteRows(baseRows,legacyRows,'desc');
+          applyFilters();
+        }catch(err){
+          if(token===historySnapshotToken)console.error('Failed to include legacy notes',err);
+        }
       });
+    }
+
+    function resetLegacyCache(){
+      legacyNotesCache=[];
+      legacyNotesPromise=null;
+      legacyNotesClassId=null;
+    }
+
+    async function ensureLegacyNotesLoaded(){
+      if(!currentUser||!currentClassId)return [];
+      if(legacyNotesPromise&&legacyNotesClassId===currentClassId){
+        const cached=await legacyNotesPromise;
+        return cached.slice();
+      }
+      const targetClassId=currentClassId;
+      const ownerUid=currentUser.uid;
+      legacyNotesClassId=targetClassId;
+      legacyNotesPromise=(async()=>{
+        const rows=await fetchLegacyNotesForClass(ownerUid,targetClassId);
+        if(legacyNotesClassId===targetClassId){
+          legacyNotesCache=rows;
+          return rows;
+        }
+        return [];
+      })();
+      try{
+        const rows=await legacyNotesPromise;
+        if(legacyNotesClassId!==targetClassId)return [];
+        return rows.slice();
+      }catch(err){
+        if(legacyNotesClassId===targetClassId){
+          resetLegacyCache();
+        }
+        throw err;
+      }
+    }
+
+    async function fetchLegacyNotesForClass(ownerUid,targetClassId){
+      if(!ownerUid||!targetClassId)return [];
+      try{
+        const legacyQuery=query(legacyNotesRef,where('ownerUid','==',ownerUid));
+        const snap=await getDocs(legacyQuery);
+        const rows=[];
+        const migrations=[];
+        snap.forEach(docSnap=>{
+          const data=docSnap.data()||{};
+          if(data.classId)return;
+          const row={id:docSnap.id,__docPath:docSnap.ref.path,__source:'legacy',...data,classId:data.classId||targetClassId};
+          rows.push(row);
+          migrations.push(updateDoc(docSnap.ref,{classId:targetClassId}).catch(err=>{
+            console.error('Failed to migrate legacy note',err);
+          }));
+        });
+        if(migrations.length){
+          await Promise.allSettled(migrations);
+        }
+        return rows;
+      }catch(err){
+        console.error('Failed to load legacy notes',err);
+        return [];
+      }
+    }
+
+    function mergeNoteRows(primaryRows=[],secondaryRows=[],direction='desc'){
+      const map=new Map();
+      (secondaryRows||[]).forEach(row=>{
+        if(row&&row.id)map.set(row.id,row);
+      });
+      (primaryRows||[]).forEach(row=>{
+        if(row&&row.id)map.set(row.id,row);
+      });
+      const merged=Array.from(map.values());
+      merged.sort((a,b)=>compareNoteRows(a,b,direction));
+      return merged;
+    }
+
+    function compareNoteRows(a,b,direction='desc'){
+      const da=parseDate(a?.date);
+      const db=parseDate(b?.date);
+      if(da&&db&&da.getTime()!==db.getTime()){
+        return direction==='desc'?db.getTime()-da.getTime():da.getTime()-db.getTime();
+      }
+      if(da&&!db)return direction==='desc'?-1:1;
+      if(!da&&db)return direction==='desc'?1:-1;
+      const ca=parseDate(a?.createdAt);
+      const cb=parseDate(b?.createdAt);
+      if(ca&&cb&&ca.getTime()!==cb.getTime()){
+        return direction==='desc'?cb.getTime()-ca.getTime():ca.getTime()-cb.getTime();
+      }
+      if(ca&&!cb)return direction==='desc'?-1:1;
+      if(!ca&&cb)return direction==='desc'?1:-1;
+      const idA=String(a?.id||'');
+      const idB=String(b?.id||'');
+      return direction==='desc'?idB.localeCompare(idA):idA.localeCompare(idB);
+    }
+
+    function docFromPath(path){
+      if(!path)return null;
+      const segments=String(path).split('/').filter(Boolean);
+      if(!segments.length)return null;
+      return doc(db,...segments);
     }
 
     function applyFilters(){
@@ -564,12 +681,17 @@
       const notesRef=getClassNotesCollection();
       if(!notesRef)return [];
       const baseConstraints=[where('date','>=',range.start),where('date','<=',range.end),orderBy('date','asc')];
-      const mapSnap=snap=>snap.docs.map(docSnap=>({id:docSnap.id,...docSnap.data()}));
+      const mapSnap=snap=>snap.docs.map(docSnap=>({id:docSnap.id,__docPath:docSnap.ref.path,__source:'class',...docSnap.data()}));
+      let classRows=[];
       if(!student){
+
         const snap=await getDocs(query(notesRef,...baseConstraints));
         return mapSnap(snap);
+
       }
+      let legacyRows=[];
       try{
+
         const snap=await getDocs(query(notesRef,where('student','==',student),...baseConstraints));
         return mapSnap(snap);
       }catch(err){
@@ -579,7 +701,9 @@
           return mapSnap(snap).filter(r=>r.student===student);
         }
         throw err;
+
       }
+      return mergeNoteRows(classRows,legacyRows,'asc');
     }
 
     reportStudent?.addEventListener('change',renderMonthlyReport);
@@ -619,6 +743,8 @@
       emptyState.classList.add('hidden');
       rows.forEach(r=>{
         const tr=document.createElement('tr');
+        const docPath=r.__docPath||(currentClassId?`classes/${currentClassId}/notes/${r.id}`:'');
+        const source=r.__source||'class';
         tr.innerHTML=`
           <td class='px-6 py-3 font-medium'>${esc(formatDisplayDate(r.date))}</td>
           <td class='px-6 py-3'>${esc(r.student||'')}</td>
@@ -628,8 +754,8 @@
           <td class='px-6 py-3'>${esc(r.qamar||'')}</td>
           <td class='px-6 py-3'>${esc(r.anythingElse||'')}</td>
           <td class='px-6 py-3 whitespace-nowrap'>
-            <button class='px-2 py-1 text-xs rounded-lg ring-1 ring-slate-300 mr-2 hover:bg-slate-100 dark:hover:bg-slate-800' data-action='edit' data-id='${r.id}'>Edit</button>
-            <button class='px-2 py-1 text-xs rounded-lg ring-1 ring-red-300 text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20' data-action='delete' data-id='${r.id}'>Delete</button>
+            <button class='px-2 py-1 text-xs rounded-lg ring-1 ring-slate-300 mr-2 hover:bg-slate-100 dark:hover:bg-slate-800' data-action='edit' data-id='${esc(r.id)}' data-path='${esc(docPath)}' data-source='${esc(source)}'>Edit</button>
+            <button class='px-2 py-1 text-xs rounded-lg ring-1 ring-red-300 text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20' data-action='delete' data-id='${esc(r.id)}' data-path='${esc(docPath)}' data-source='${esc(source)}'>Delete</button>
           </td>`;
         historyBody.appendChild(tr);
       });
@@ -952,6 +1078,9 @@
       userClasses=[];
       historyRows=[];
       currentReportRows=[];
+      resetLegacyCache();
+      lastClassRows=[];
+      historySnapshotToken=0;
       reportInfo.textContent='';
       renderHistory([]);
       reportTableWrapper.classList.add('hidden');
@@ -974,6 +1103,9 @@
       if(classId===currentClassId)return;
       if(unsub){unsub();unsub=null;}
       if(classDocUnsub){classDocUnsub();classDocUnsub=null;}
+      resetLegacyCache();
+      lastClassRows=[];
+      historySnapshotToken=0;
       currentClassId=classId||null;
       currentClassName='';
       historyRows=[];
@@ -1116,8 +1248,13 @@
         if(inputs.student.value!==selectionToken)return;
         if(snap.exists()){
           setEditMode({...snap.data(),id:snap.id});
-        }else if(editingKey){
-          setEditMode(null,{preserveStudent:true});
+        }else{
+          const legacy=legacyNotesCache.find(r=>r.id===id);
+          if(legacy){
+            setEditMode({id:legacy.id,...legacy});
+          }else if(editingKey){
+            setEditMode(null,{preserveStudent:true});
+          }
         }
       }catch(err){
         console.error('Failed to load daily entry',err);
@@ -1125,6 +1262,7 @@
     }
 
     historyBody.addEventListener('click',async(e)=>{
+
       const btn=e.target.closest('button'); if(!btn) return;
       const notesRef=getClassNotesCollection();
       if(!notesRef)return;
@@ -1136,6 +1274,7 @@
         if(!confirm('Delete this note?')) return;
         await deleteDoc(doc(notesRef,id));
         showToast('Deleted','success');
+
       }
     });
 
