@@ -64,9 +64,13 @@
           <p id="siMsg" class="text-sm text-slate-500"></p>
         </form>
         <form id="signupForm" class="hidden p-6 md:p-8 space-y-4">
-          <div class="text-sm text-slate-500">Create your teacher account.</div>
+          <div class="text-sm text-slate-500 space-y-1">
+            <p>Create your teacher account and set up your first class.</p>
+            <p class="text-xs text-slate-400">You'll be able to add students after you sign in.</p>
+          </div>
           <input id="suEmail" type="email" placeholder="Email" class="w-full rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border-2 border-slate-200/60 dark:border-slate-700/60 px-4 py-3 focus:border-emerald-500 focus:ring-0" required />
           <input id="suPass" type="password" placeholder="Password (min 6)" minlength="6" class="w-full rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border-2 border-slate-200/60 dark:border-slate-700/60 px-4 py-3 focus:border-emerald-500 focus:ring-0" required />
+          <input id="suClassName" type="text" placeholder="Class name" class="w-full rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border-2 border-slate-200/60 dark:border-slate-700/60 px-4 py-3 focus:border-emerald-500 focus:ring-0" required />
           <button class="btn-primary w-full px-5 py-3 rounded-2xl text-white font-semibold">Create account</button>
           <p id="suMsg" class="text-sm text-slate-500"></p>
           <div class="text-sm"><button id="showSignin" type="button" class="text-emerald-700 hover:underline">Back to sign in</button></div>
@@ -249,6 +253,8 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+    const ROOT_CLASS_DOCUMENT_ID='Attari';
+    const notesColRef=collection(db,'classes',ROOT_CLASS_DOCUMENT_ID,'notes');
 
     // UI refs
     const authGate = document.getElementById('authGate');
@@ -262,11 +268,38 @@
     // Forms
     const signinForm = document.getElementById('signinForm');
     const signupForm = document.getElementById('signupForm');
+    const suClassNameInput=document.getElementById('suClassName');
     document.getElementById('showSignup').addEventListener('click',()=>{signinForm.classList.add('hidden');signupForm.classList.remove('hidden')});
     document.getElementById('showSignin').addEventListener('click',()=>{signupForm.classList.add('hidden');signinForm.classList.remove('hidden')});
 
     signinForm.addEventListener('submit', async (e)=>{e.preventDefault();const email=siEmail.value.trim();const pass=siPass.value;siMsg.textContent='';try{await signInWithEmailAndPassword(auth,email,pass);}catch(err){siMsg.textContent=err.message;showToast(err.message,'error')}});
-    signupForm.addEventListener('submit', async (e)=>{e.preventDefault();const email=suEmail.value.trim();const pass=suPass.value;suMsg.textContent='';try{await createUserWithEmailAndPassword(auth,email,pass);suMsg.textContent='Account created. Signed in.';showToast('Welcome!','success')}catch(err){suMsg.textContent=err.message;showToast(err.message,'error')}});
+    signupForm.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const email=suEmail.value.trim();
+      const pass=suPass.value;
+      const className=suClassNameInput.value.trim();
+      suMsg.textContent='';
+      if(!className){
+        suMsg.textContent='Class name is required.';
+        return;
+      }
+      try{
+        const credential=await createUserWithEmailAndPassword(auth,email,pass);
+        try{
+          const created=await createClassForUser(credential.user,className);
+          suMsg.textContent=`Class “${created.name}” created. Signed in.`;
+          showToast('Welcome! Your class is ready.','success');
+          signupForm.reset();
+        }catch(classErr){
+          console.error('Failed to create initial class',classErr);
+          suMsg.textContent='Account created, but the class could not be set up. Use the New class button after signing in.';
+          showToast('Account created, but the class could not be set up.','error');
+        }
+      }catch(err){
+        suMsg.textContent=err.message;
+        showToast(err.message,'error');
+      }
+    });
     signOutBtn?.addEventListener('click', ()=>signOut(auth));
 
     // Students and elements
@@ -358,6 +391,7 @@
           studentsChips.innerHTML=sorted.map(name=>`<span class="px-3 py-1 rounded-full bg-slate-200/70 dark:bg-slate-800/70">${esc(name)}</span>`).join('');
         }else{
           const emptyLabel=classActive?'No students yet.':'No class selected.';
+
           studentsChips.innerHTML=`<span class="px-3 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800/60">${esc(emptyLabel)}</span>`;
         }
       }
@@ -422,7 +456,12 @@
     if(reportMonth)reportMonth.value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 
     const slug=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
-    const noteId=(date,student)=>`${date}_${slug(student)}`;
+    const noteId=(classId,date,student)=>{
+      const safeClass=String(classId||'').trim()||'class';
+      const safeStudent=slug(student||'student');
+      return `${safeClass}__${date}_${safeStudent}`;
+    };
+    const legacyNoteId=(date,student)=>`${date}_${slug(student||'student')}`;
 
     // Edit mode
     let editingKey=null;
@@ -477,6 +516,7 @@
         const ref=doc(notesColRef,id);
         const payload={
           id,
+
           date:entryDate,
           student,
           quran:inputs.quran.value.trim(),
@@ -485,6 +525,7 @@
           qamar:inputs.qamar.value.trim(),
           anythingElse:inputs.anything.value.trim(),
           updatedAt:serverTimestamp(),
+
           ownerUid:auth.currentUser?.uid||null
         };
         const snap=await getDoc(ref);
@@ -508,7 +549,9 @@
     let currentUser=null;
     let currentClassId=null;
     let currentClassName='';
+
     let notesColRef=null;
+
     let classesUnsub=null;
     let classDocUnsub=null;
     let unsub=null;
@@ -522,17 +565,42 @@
       if(unsub)unsub();
       historyRows=[];
       renderHistory([]);
+
       if(!notesColRef)return;
       const q=query(notesColRef,orderBy('date','desc'),qLimit(200));
+
       unsub=onSnapshot(q,(snap)=>{
-        historyRows=snap.docs.map(d=>({id:d.id,...d.data()}));
+        historyRows=snap.docs
+          .map(d=>{
+            const data={id:d.id,...d.data()};
+            if(!data.classId&&currentClassId&&currentUser&&data.ownerUid===currentUser.uid){
+              data.classId=currentClassId;
+            }
+            return data;
+          })
+          .filter(row=>{
+            if(row.classId===currentClassId)return true;
+            if(!row.classId&&currentUser&&row.ownerUid===currentUser.uid)return true;
+            return false;
+          })
+          .sort((a,b)=>{
+            const dateA=parseDate(a.date)||new Date(0);
+            const dateB=parseDate(b.date)||new Date(0);
+            if(dateA.getTime()!==dateB.getTime())return dateB.getTime()-dateA.getTime();
+            return (a.student||'').localeCompare(b.student||'',undefined,{sensitivity:'base'});
+          });
         applyFilters();
         renderMonthlyReport();
+      },(err)=>{
+        console.error('Failed to stream notes',err);
+        showToast('Unable to load notes for this class.','error');
       });
     }
 
     function applyFilters(){
+
       if(!notesColRef){
+
         renderHistory([]);
         return;
       }
@@ -550,21 +618,25 @@
     document.getElementById('reload').addEventListener('click',applyFilters);
 
     async function fetchMonthlyRows(student,range){
+
       if(!notesColRef)return [];
       const baseConstraints=[where('date','>=',range.start),where('date','<=',range.end),orderBy('date','asc')];
       const mapSnap=snap=>snap.docs.map(docSnap=>({id:docSnap.id,...docSnap.data()}));
       if(!student){
         const snap=await getDocs(query(notesColRef,...baseConstraints));
         return mapSnap(snap);
+
       }
       try{
         const snap=await getDocs(query(notesColRef,where('student','==',student),...baseConstraints));
         return mapSnap(snap);
       }catch(err){
         // fallback if composite index is missing
+
         if(err?.code==='failed-precondition'||/index/i.test(err?.message||'')){
           const snap=await getDocs(query(notesColRef,...baseConstraints));
           return mapSnap(snap).filter(r=>r.student===student);
+
         }
         throw err;
       }
@@ -601,7 +673,8 @@
       historyBody.innerHTML='';
       if(!rows.length){
         emptyState.classList.remove('hidden');
-        countInfo.textContent='0 notes';
+        const classLabel=currentClassName||'this class';
+        countInfo.textContent=`0 notes in ${classLabel}`;
         return;
       }
       emptyState.classList.add('hidden');
@@ -621,7 +694,8 @@
           </td>`;
         historyBody.appendChild(tr);
       });
-      countInfo.textContent=`${rows.length} note${rows.length===1?'':'s'} shown`;
+      const classLabel=currentClassName||'this class';
+      countInfo.textContent=`${rows.length} note${rows.length===1?'':'s'} in ${classLabel}`;
     }
 
     async function renderMonthlyReport(){
@@ -640,7 +714,9 @@
       reportTableWrapper.classList.add('hidden');
       reportEmpty.classList.remove('hidden');
 
+
       if(!notesColRef){
+
         reportEmptyText.textContent='Select a class to see monthly reports.';
         return;
       }
@@ -698,7 +774,9 @@
     }
 
     async function downloadMonthlyReport(){
+
       if(!notesColRef||!currentReportRows.length||!reportStudent||!reportMonth||!reportDownload)return;
+
       const student=reportStudent.value;
       const monthValue=reportMonth.value;
       if(!student||!monthValue)return;
@@ -905,6 +983,7 @@
         setCurrentClass(null);
         return;
       }
+
       const classesRef=collection(db,'classes');
       const classesQuery=query(classesRef,where('members','array-contains',uid));
       classesUnsub=onSnapshot(classesQuery,(snap)=>{
@@ -915,6 +994,7 @@
         });
         const availableIds=userClasses.map(c=>c.id);
         let desired=null;
+
         if(currentClassId&&availableIds.includes(currentClassId)){
           desired=currentClassId;
         }else if(availableIds.length){
@@ -935,7 +1015,9 @@
     function resetAppState(){
       if(unsub){unsub();unsub=null;}
       if(classDocUnsub){classDocUnsub();classDocUnsub=null;}
+
       notesColRef=null;
+
       currentClassId=null;
       currentClassName='';
       userClasses=[];
@@ -950,6 +1032,7 @@
       filterDate.value='';
       if(reportStudent)reportStudent.value='';
       pendingStudentSelection=null;
+
       setEditMode(null);
       populateStudents([]);
       setFormDisabled(true);
@@ -965,7 +1048,9 @@
       if(classDocUnsub){classDocUnsub();classDocUnsub=null;}
       currentClassId=classId||null;
       currentClassName='';
+
       notesColRef=null;
+
       historyRows=[];
       currentReportRows=[];
       reportInfo.textContent='';
@@ -988,8 +1073,10 @@
       if(classSelect&&classSelect.value!==currentClassId){
         classSelect.value=currentClassId;
       }
+
       const classRef=doc(db,'classes',currentClassId);
       notesColRef=collection(classRef,'notes');
+
       setEditMode(null);
       setFormDisabled(false);
       updateClassStatus('Loading class…');
@@ -1005,7 +1092,9 @@
         currentClassName=data.name||currentClassId;
         updateClassStatus(`Working in ${currentClassName}`);
         updateClassHint(currentClassId,currentClassName);
+
         populateStudents(data.students||[]);
+
       },(err)=>{
         console.error('Failed to load class',err);
         showToast('Unable to load class','error');
@@ -1016,12 +1105,15 @@
       renderMonthlyReport();
     }
 
+
+
     async function handleCreateClass(){
       if(!currentUser){showToast('Sign in to create a class.','error');return;}
       const name=prompt('Name for the new class?');
       if(name===null)return;
       const trimmed=name.trim();
       if(!trimmed){showToast('Class name is required.','error');return;}
+
       const id=slug(trimmed);
       if(!id){showToast('Class name must include letters or numbers.','error');return;}
       const classRef=doc(db,'classes',id);
@@ -1038,6 +1130,7 @@
       }catch(err){
         console.error(err);
         showToast('Unable to create class','error');
+
       }
     }
 
@@ -1047,6 +1140,7 @@
       if(code===null)return;
       const trimmed=code.trim();
       if(!trimmed){showToast('Class code is required.','error');return;}
+
       let classId=trimmed;
       let classRef=doc(db,'classes',classId);
       let snap=await getDoc(classRef);
@@ -1060,12 +1154,15 @@
       }
       if(!snap.exists()){
         showToast('Class not found.','error');
+
         return;
       }
       try{
         await updateDoc(classRef,{members:arrayUnion(currentUser.uid)});
         showToast('Joined class ✓','success');
+
         setCurrentClass(classId);
+
       }catch(err){
         console.error(err);
         showToast('Unable to join class.','error');
@@ -1082,7 +1179,9 @@
         showToast('Student already exists.','error');
         return;
       }
+
       const classRef=doc(db,'classes',currentClassId);
+
       try{
         pendingStudentSelection=trimmed;
         await updateDoc(classRef,{students:arrayUnion(trimmed)});
@@ -1094,6 +1193,7 @@
     }
 
     async function maybeLoadTodaysEntry(student){
+
       if(!student||!notesColRef)return;
       const expectedClassId=currentClassId;
       const selectionToken=student;
@@ -1105,6 +1205,7 @@
         if(inputs.student.value!==selectionToken)return;
         if(snap.exists()){
           setEditMode({...snap.data(),id:snap.id});
+
         }else if(editingKey){
           setEditMode(null,{preserveStudent:true});
         }
@@ -1115,11 +1216,13 @@
 
     historyBody.addEventListener('click',async(e)=>{
       const btn=e.target.closest('button'); if(!btn) return;
+
       if(!notesColRef)return;
       const id=btn.getAttribute('data-id');
       if(btn.getAttribute('data-action')==='edit'){
         const snap=await getDoc(doc(notesColRef,id));
         if(snap.exists()) setEditMode({id:snap.id,...snap.data()});
+
       } else if(btn.getAttribute('data-action')==='delete'){
         if(!confirm('Delete this note?')) return;
         await deleteDoc(doc(notesColRef,id));
@@ -1151,7 +1254,11 @@
     });
 
     // Utils
-    function extractDateFromId(id){if(!id)return null;const m=String(id).match(/^(\d{4}-\d{2}-\d{2})_/);return m?m[1]:null;}
+    function extractDateFromId(id){
+      if(!id)return null;
+      const m=String(id).match(/(\d{4}-\d{2}-\d{2})/);
+      return m?m[1]:null;
+    }
     function parseDate(input){
       if(!input&&input!==0)return null;
       if(input instanceof Date)return isNaN(input.getTime())?null:input;
