@@ -64,9 +64,13 @@
           <p id="siMsg" class="text-sm text-slate-500"></p>
         </form>
         <form id="signupForm" class="hidden p-6 md:p-8 space-y-4">
-          <div class="text-sm text-slate-500">Create your teacher account.</div>
+          <div class="text-sm text-slate-500 space-y-1">
+            <p>Create your teacher account and set up your first class.</p>
+            <p class="text-xs text-slate-400">You'll be able to add students after you sign in.</p>
+          </div>
           <input id="suEmail" type="email" placeholder="Email" class="w-full rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border-2 border-slate-200/60 dark:border-slate-700/60 px-4 py-3 focus:border-emerald-500 focus:ring-0" required />
           <input id="suPass" type="password" placeholder="Password (min 6)" minlength="6" class="w-full rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border-2 border-slate-200/60 dark:border-slate-700/60 px-4 py-3 focus:border-emerald-500 focus:ring-0" required />
+          <input id="suClassName" type="text" placeholder="Class name" class="w-full rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border-2 border-slate-200/60 dark:border-slate-700/60 px-4 py-3 focus:border-emerald-500 focus:ring-0" required />
           <button class="btn-primary w-full px-5 py-3 rounded-2xl text-white font-semibold">Create account</button>
           <p id="suMsg" class="text-sm text-slate-500"></p>
           <div class="text-sm"><button id="showSignin" type="button" class="text-emerald-700 hover:underline">Back to sign in</button></div>
@@ -76,13 +80,40 @@
 
     <!-- APP -->
     <div id="app" class="hidden">
-      <div class="grid grid-cols-1 xl:grid-cols-5 gap-8">
+      <div class="grid grid-cols-1 xl:grid-cols-5 gap-6">
         <!-- Form Card -->
         <section class="xl:col-span-2">
           <div class="glass bg-white/70 dark:bg-slate-900/70 rounded-3xl shadow-2xl border border-white/20 dark:border-slate-700/30">
-            <div class="p-6 md:p-8 border-b border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between">
-              <h2 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-600"><span id="formTitle">✨ New Entry</span></h2>
-              <button id="signOutBtn" class="px-3 py-1.5 rounded-xl ring-1 ring-slate-300 dark:ring-slate-700 text-sm">Sign out</button>
+            <div class="p-6 md:p-8 border-b border-slate-200/50 dark:border-slate-700/50 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-600"><span id="formTitle">✨ New Entry</span></h2>
+                <p id="classStatus" class="text-xs text-slate-500 dark:text-slate-400 mt-1">Select a class to get started.</p>
+              </div>
+              <button id="signOutBtn" class="px-3 py-1.5 rounded-xl ring-1 ring-slate-300 dark:ring-slate-700 text-sm self-start md:self-auto">Sign out</button>
+            </div>
+            <div class="px-6 md:px-8 pt-6 border-b border-slate-200/50 dark:border-slate-700/50 space-y-4">
+              <div>
+                <label class="block text-sm font-semibold mb-2">🏫 Class</label>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <select id="classSelect" class="w-full sm:flex-1 rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border-2 border-slate-200/60 dark:border-slate-700/60 px-4 py-3 text-sm focus:border-emerald-500 focus:ring-0" aria-label="Select class">
+                    <option value="" disabled selected>Loading classes…</option>
+                  </select>
+                  <div class="flex flex-wrap gap-2">
+                    <button id="newClassBtn" type="button" class="px-4 py-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold shadow">➕ New class</button>
+                    <button id="joinClassBtn" type="button" class="px-4 py-2 rounded-2xl bg-slate-200/80 dark:bg-slate-700/80 text-slate-700 dark:text-slate-200 text-sm font-semibold border border-slate-300/40 dark:border-slate-600/40">🔑 Join class</button>
+                  </div>
+                </div>
+                <p id="classHint" class="mt-2 text-xs text-slate-500 dark:text-slate-400">Create or join a class to manage its own notes database.</p>
+              </div>
+              <div>
+                <div class="flex items-center justify-between gap-3 mb-2">
+                  <span class="block text-sm font-semibold">👥 Students</span>
+                  <button id="addStudentBtn" type="button" class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-xs font-semibold shadow">➕ Add student</button>
+                </div>
+                <div id="studentsChips" class="flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-400">
+                  <span class="px-3 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800/60">No class selected.</span>
+                </div>
+              </div>
             </div>
             <form id="notesForm" class="p-6 md:p-8 space-y-6">
               <div>
@@ -127,7 +158,7 @@
               </div>
             </div>
             <div class="overflow-hidden">
-              <div class="overflow-x-auto custom-scrollbar max-h-96">
+              <div class="overflow-x-auto custom-scrollbar max-h-[75vh]">
                 <table class="min-w-full text-left text-sm">
                   <thead class="sticky top-0 backdrop-blur bg-slate-100/90 dark:bg-slate-800/90">
                     <tr>
@@ -205,7 +236,7 @@
 
       <footer class="mt-12 text-center">
         <div class="glass bg-white/60 dark:bg-slate-800/60 rounded-2xl px-6 py-4 inline-block">
-          <p class="text-xs text-slate-600 dark:text-slate-400">🔒 Data: <span class="font-mono font-semibold">classes/Attari/notes</span> • Unique per <em>date + student</em></p>
+          <p class="text-xs text-slate-600 dark:text-slate-400">🔒 Data: <span id="classPathLabel" class="font-mono font-semibold">classes/—</span> • Unique per <em>date + student</em></p>
         </div>
       </footer>
     </div>
@@ -215,13 +246,15 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
-    import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, query, orderBy, where, limit as qLimit, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+    import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, updateDoc, query, orderBy, where, onSnapshot, serverTimestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
 
     const firebaseConfig = { apiKey:"AIzaSyCTGIoNNey_0GwRxg_85Xv-jEQtQDjzehw", authDomain:"attari-579d2.firebaseapp.com", projectId:"attari-579d2", storageBucket:"attari-579d2.firebasestorage.app", messagingSenderId:"765966619098", appId:"1:765966619098:web:9ab852c4881426472b70e3" };
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+    const ROOT_CLASS_DOCUMENT_ID='Attari';
+    const notesColRef=collection(db,'classes',ROOT_CLASS_DOCUMENT_ID,'notes');
 
     // UI refs
     const authGate = document.getElementById('authGate');
@@ -235,17 +268,52 @@
     // Forms
     const signinForm = document.getElementById('signinForm');
     const signupForm = document.getElementById('signupForm');
+    const suClassNameInput=document.getElementById('suClassName');
     document.getElementById('showSignup').addEventListener('click',()=>{signinForm.classList.add('hidden');signupForm.classList.remove('hidden')});
     document.getElementById('showSignin').addEventListener('click',()=>{signupForm.classList.add('hidden');signinForm.classList.remove('hidden')});
 
     signinForm.addEventListener('submit', async (e)=>{e.preventDefault();const email=siEmail.value.trim();const pass=siPass.value;siMsg.textContent='';try{await signInWithEmailAndPassword(auth,email,pass);}catch(err){siMsg.textContent=err.message;showToast(err.message,'error')}});
-    signupForm.addEventListener('submit', async (e)=>{e.preventDefault();const email=suEmail.value.trim();const pass=suPass.value;suMsg.textContent='';try{await createUserWithEmailAndPassword(auth,email,pass);suMsg.textContent='Account created. Signed in.';showToast('Welcome!','success')}catch(err){suMsg.textContent=err.message;showToast(err.message,'error')}});
+    signupForm.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const email=suEmail.value.trim();
+      const pass=suPass.value;
+      const className=suClassNameInput.value.trim();
+      suMsg.textContent='';
+      if(!className){
+        suMsg.textContent='Class name is required.';
+        return;
+      }
+      try{
+        const credential=await createUserWithEmailAndPassword(auth,email,pass);
+        try{
+          const created=await createClassForUser(credential.user,className);
+          suMsg.textContent=`Class “${created.name}” created. Signed in.`;
+          showToast('Welcome! Your class is ready.','success');
+          signupForm.reset();
+        }catch(classErr){
+          console.error('Failed to create initial class',classErr);
+          suMsg.textContent='Account created, but the class could not be set up. Use the New class button after signing in.';
+          showToast('Account created, but the class could not be set up.','error');
+        }
+      }catch(err){
+        suMsg.textContent=err.message;
+        showToast(err.message,'error');
+      }
+    });
     signOutBtn?.addEventListener('click', ()=>signOut(auth));
 
     // Students and elements
-    const students=["Siyaam Azar","Hussain Ali","Hamza Razzaq","Subhan Hussain","Milad Raza","Murtaza Arfan","Zeeshan Hussain","Mohammed Subhan Ramzan","Onees Usman","Mohammed Hassan Hussain","Ali Hussein"];
     const MONTH_LABELS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const classSelect=document.getElementById('classSelect');
+    const newClassBtn=document.getElementById('newClassBtn');
+    const joinClassBtn=document.getElementById('joinClassBtn');
+    const addStudentBtn=document.getElementById('addStudentBtn');
+    const studentsChips=document.getElementById('studentsChips');
+    const classHint=document.getElementById('classHint');
+    const classStatus=document.getElementById('classStatus');
+    const classPathLabel=document.getElementById('classPathLabel');
     const inputs={student:document.getElementById('student'),quran:document.getElementById('quran'),surah:document.getElementById('surah'),laws:document.getElementById('laws'),qamar:document.getElementById('qamar'),anything:document.getElementById('anything')};
+    const notesForm=document.getElementById('notesForm');
     const filterStudent=document.getElementById('filterStudent');
     const filterDate=document.getElementById('filterDate');
     const historyBody=document.getElementById('historyBody');
@@ -268,38 +336,151 @@
     const reportDownload=document.getElementById('reportDownload');
 
     // Populate selects
-    function populateStudents(){
+    let classStudents=[];
+    let pendingStudentSelection=null;
+    function populateStudents(list){
+      const prevStudent=inputs.student.value;
+      const prevFilterStudent=filterStudent.value;
+      const prevReportStudent=reportStudent.value;
+      const cleaned=Array.isArray(list)?Array.from(new Set(list.map(s=>s?.toString().trim()).filter(Boolean))):[];
+      const sorted=cleaned.sort((a,b)=>a.localeCompare(b,'en',{sensitivity:'base'}));
+      classStudents=sorted;
+
       inputs.student.innerHTML='<option value="" disabled selected>Choose a student…</option>';
-      filterStudent.innerHTML='<option value="">All students</option>';
-      reportStudent.innerHTML='<option value="" disabled selected>Select a student…</option>';
-      students.forEach(n=>{
-        const o=document.createElement('option');o.value=n;o.textContent=n;inputs.student.appendChild(o);
-        const o2=document.createElement('option');o2.value=o.value;o2.textContent=n;filterStudent.appendChild(o2);
-        const o3=document.createElement('option');o3.value=o.value;o3.textContent=n;reportStudent.appendChild(o3);
+      sorted.forEach(name=>{
+        const option=document.createElement('option');
+        option.value=name;
+        option.textContent=name;
+        inputs.student.appendChild(option);
       });
+
+      filterStudent.innerHTML='<option value="">All students</option>';
+      sorted.forEach(name=>{
+        const option=document.createElement('option');
+        option.value=name;
+        option.textContent=name;
+        filterStudent.appendChild(option);
+      });
+
+      reportStudent.innerHTML='<option value="" disabled selected>Select a student…</option>';
+      sorted.forEach(name=>{
+        const option=document.createElement('option');
+        option.value=name;
+        option.textContent=name;
+        reportStudent.appendChild(option);
+      });
+
+      if(pendingStudentSelection&&sorted.includes(pendingStudentSelection)){
+        inputs.student.value=pendingStudentSelection;
+      }else if(prevStudent&&sorted.includes(prevStudent)){
+        inputs.student.value=prevStudent;
+      }
+
+      filterStudent.value=prevFilterStudent&&sorted.includes(prevFilterStudent)?prevFilterStudent:'';
+      reportStudent.value=prevReportStudent&&sorted.includes(prevReportStudent)?prevReportStudent:'';
+      pendingStudentSelection=null;
+
+      const classActive=Boolean(currentClassId);
+      inputs.student.disabled=!classActive||!sorted.length;
+      filterStudent.disabled=!classActive||!sorted.length;
+      reportStudent.disabled=!classActive||!sorted.length;
+      addStudentBtn.disabled=!classActive;
+
+      if(studentsChips){
+        if(sorted.length){
+          studentsChips.innerHTML=sorted.map(name=>`<span class="px-3 py-1 rounded-full bg-slate-200/70 dark:bg-slate-800/70">${esc(name)}</span>`).join('');
+        }else{
+          const emptyLabel=classActive?'No students yet — use “Add student” after signing in.':'No class selected.';
+          studentsChips.innerHTML=`<span class="px-3 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800/60">${esc(emptyLabel)}</span>`;
+        }
+      }
+
+      const selectedStudent=inputs.student.value;
+      if(classActive&&selectedStudent&&selectedStudent!==prevStudent){
+        maybeLoadTodaysEntry(selectedStudent);
+      }
     }
-    populateStudents();
+
+    function setFormDisabled(disabled){
+      if(disabled){
+        notesForm.classList.add('opacity-60');
+      }else{
+        notesForm.classList.remove('opacity-60');
+      }
+      const elements=notesForm.querySelectorAll('input, textarea, select, button');
+      elements.forEach(el=>{
+        if(el.id==='cancelEditBtn')return;
+        if(el===inputs.student){
+          el.disabled=disabled||!classStudents.length;
+          return;
+        }
+        if(el.id==='saveBtn'){
+          el.disabled=disabled;
+          el.classList.toggle('opacity-60',disabled);
+          el.classList.toggle('cursor-not-allowed',disabled);
+        }else{
+          el.disabled=disabled;
+        }
+      });
+      filterStudent.disabled=disabled||!classStudents.length;
+      filterDate.disabled=disabled;
+      reportStudent.disabled=disabled||!classStudents.length;
+      reportMonth.disabled=disabled;
+      reportFormat.disabled=disabled;
+      reportDownload.disabled=true;
+      addStudentBtn.disabled=disabled||!currentClassId;
+    }
+
+    function updateClassPathLabelText(classId){
+      if(classPathLabel){
+        const suffix=classId?` • class ${classId}`:'';
+        classPathLabel.textContent=`classes/${ROOT_CLASS_DOCUMENT_ID}/notes${suffix}`;
+      }
+    }
+
+    function updateClassHint(classId,className=''){
+      if(!classHint)return;
+      if(classId){
+        const nameHtml=className?`<span class="font-semibold">${esc(className)}</span> • `:'';
+        classHint.innerHTML=`${nameHtml}Class code: <span class="font-mono font-semibold">${esc(classId)}</span> • Data path <span class="font-mono">classes/${esc(ROOT_CLASS_DOCUMENT_ID)}/notes</span> • Share this code with co-teachers to let them join.`;
+      }else{
+        classHint.textContent='Create or join a class to manage its own notes database.';
+      }
+    }
+
+    function updateClassStatus(text){
+      if(classStatus)classStatus.textContent=text;
+    }
 
     const now=new Date();
     const todayKey=toLocalISODate(now);
     document.getElementById('todayDisplay').textContent=formatDisplayDate(todayKey);
     if(reportMonth)reportMonth.value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 
-    const CLASS_ID='Attari';
-    const notesCol=collection(doc(db,'classes',CLASS_ID),'notes');
-
     const slug=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
-    const noteId=(date,student)=>`${date}_${slug(student)}`;
+    const noteId=(classId,date,student)=>{
+      const safeClass=String(classId||'').trim()||'class';
+      const safeStudent=slug(student||'student');
+      return `${safeClass}__${date}_${safeStudent}`;
+    };
+    const legacyNoteId=(date,student)=>`${date}_${slug(student||'student')}`;
 
     // Edit mode
     let editingKey=null;
-    function setEditMode(n=null){
+    function setEditMode(n=null,{preserveStudent=false}={}){
+      const previousStudent=inputs.student.value;
       if(n){
         editingKey=n.id;
         formTitle.textContent='✏️ Edit Entry';
         saveText.textContent='✅ Update Entry';
         cancelEditBtn.classList.remove('hidden');
-        inputs.student.value=n.student;
+        if(n.student){
+          if(!classStudents.includes(n.student)){
+            pendingStudentSelection=n.student;
+            populateStudents(classStudents);
+          }
+          inputs.student.value=n.student;
+        }
         inputs.quran.value=n.quran||'';
         inputs.surah.value=n.surah||'';
         inputs.laws.value=n.lawsOfSalah||'';
@@ -310,59 +491,116 @@
         formTitle.textContent='✨ New Entry';
         saveText.textContent='💾 Save Entry';
         cancelEditBtn.classList.add('hidden');
-        document.getElementById('notesForm').reset();
+        notesForm.reset();
+        if(preserveStudent&&previousStudent){
+          inputs.student.value=previousStudent;
+        }
       }
     }
-    cancelEditBtn.addEventListener('click',()=>setEditMode(null));
+    cancelEditBtn.addEventListener('click',()=>setEditMode(null,{preserveStudent:true}));
 
     // Save/Update
-    document.getElementById('notesForm').addEventListener('submit',async(e)=>{
+    notesForm.addEventListener('submit',async(e)=>{
       e.preventDefault();
+      if(!currentClassId){
+        saveStatus.textContent='Select a class first';
+        showToast('Select a class before saving.','error');
+        return;
+      }
       const student=inputs.student.value;
-      if(!student){saveStatus.textContent='Choose a student';return}
+      if(!student){saveStatus.textContent='Choose a student';return;}
       saveSpinner.classList.remove('hidden');
-      const defaultDate=toLocalISODate(new Date());
-      const entryDate=editingKey?extractDateFromId(editingKey)||defaultDate:defaultDate;
-      const id=editingKey||noteId(entryDate,student);
-      const ref=doc(notesCol,id);
-      const payload={
-        id,
-        date:entryDate,
-        student,
-        quran:inputs.quran.value.trim(),
-        surah:inputs.surah.value.trim(),
-        lawsOfSalah:inputs.laws.value.trim(),
-        qamar:inputs.qamar.value.trim(),
-        anythingElse:inputs.anything.value.trim(),
-        updatedAt:serverTimestamp(),
-        ownerUid:auth.currentUser?.uid||null
-      };
-      const snap=await getDoc(ref);
-      if(!snap.exists())payload.createdAt=serverTimestamp();
-      await setDoc(ref,payload,{merge:true});
-      saveSpinner.classList.add('hidden');
-      showToast(editingKey?'Updated ✓':'Saved ✓','success');
-      saveStatus.textContent=editingKey?'Updated ✅':'Saved ✅';
-      setTimeout(()=>saveStatus.textContent='',1200);
-      setEditMode(null);
+      saveBtn.disabled=true;
+      try{
+        const defaultDate=toLocalISODate(new Date());
+        const entryDate=editingKey?extractDateFromId(editingKey)||defaultDate:defaultDate;
+        const id=editingKey||noteId(currentClassId,entryDate,student);
+        const ref=doc(notesColRef,id);
+        const payload={
+          id,
+          classId:currentClassId,
+          className:currentClassName||'',
+          date:entryDate,
+          student,
+          quran:inputs.quran.value.trim(),
+          surah:inputs.surah.value.trim(),
+          lawsOfSalah:inputs.laws.value.trim(),
+          qamar:inputs.qamar.value.trim(),
+          anythingElse:inputs.anything.value.trim(),
+          updatedAt:serverTimestamp(),
+          ownerUid:auth.currentUser?.uid||null,
+          type:'note'
+        };
+        const snap=await getDoc(ref);
+        if(!snap.exists())payload.createdAt=serverTimestamp();
+        await setDoc(ref,payload,{merge:true});
+        showToast(editingKey?'Updated ✓':'Saved ✓','success');
+        saveStatus.textContent=editingKey?'Updated ✅':'Saved ✅';
+        setTimeout(()=>saveStatus.textContent='',1200);
+        setEditMode(null,{preserveStudent:true});
+      }catch(err){
+        console.error(err);
+        saveStatus.textContent='Failed to save ❌';
+        showToast('Failed to save note.','error');
+      }finally{
+        saveSpinner.classList.add('hidden');
+        saveBtn.disabled=false;
+      }
     });
 
     // History stream & filters
-    let unsub=null, historyRows=[], currentReportRows=[];
+    let currentUser=null;
+    let currentClassId=null;
+    let currentClassName='';
+    let classesUnsub=null;
+    let classDocUnsub=null;
+    let unsub=null;
+    let historyRows=[];
+    let currentReportRows=[];
     let reportRequestToken=0;
     let jsPdfModulePromise=null;
+    let userClasses=[];
+    let preferredClassAfterCreation=null;
 
     function startHistoryStream(){
       if(unsub)unsub();
-      const q=query(notesCol,orderBy('date','desc'),qLimit(200));
+      historyRows=[];
+      renderHistory([]);
+      if(!currentClassId)return;
+      const q=query(notesColRef,where('classId','==',currentClassId));
       unsub=onSnapshot(q,(snap)=>{
-        historyRows=snap.docs.map(d=>({id:d.id,...d.data()}));
+        historyRows=snap.docs
+          .map(d=>{
+            const data={id:d.id,...d.data()};
+            if(!data.classId&&currentClassId&&currentUser&&data.ownerUid===currentUser.uid){
+              data.classId=currentClassId;
+            }
+            return data;
+          })
+          .filter(row=>{
+            if(row.classId===currentClassId)return true;
+            if(!row.classId&&currentUser&&row.ownerUid===currentUser.uid)return true;
+            return false;
+          })
+          .sort((a,b)=>{
+            const dateA=parseDate(a.date)||new Date(0);
+            const dateB=parseDate(b.date)||new Date(0);
+            if(dateA.getTime()!==dateB.getTime())return dateB.getTime()-dateA.getTime();
+            return (a.student||'').localeCompare(b.student||'',undefined,{sensitivity:'base'});
+          });
         applyFilters();
         renderMonthlyReport();
+      },(err)=>{
+        console.error('Failed to stream notes',err);
+        showToast('Unable to load notes for this class.','error');
       });
     }
 
     function applyFilters(){
+      if(!currentClassId){
+        renderHistory([]);
+        return;
+      }
       const s=filterStudent.value;
       const d=filterDate.value;
       let list=historyRows;
@@ -377,20 +615,41 @@
     document.getElementById('reload').addEventListener('click',applyFilters);
 
     async function fetchMonthlyRows(student,range){
-      const baseConstraints=[where('date','>=',range.start),where('date','<=',range.end),orderBy('date','asc')];
-      const mapSnap=snap=>snap.docs.map(docSnap=>({id:docSnap.id,...docSnap.data()}));
+      if(!currentClassId)return [];
+      const baseConstraints=[
+        where('classId','==',currentClassId),
+        where('date','>=',range.start),
+        where('date','<=',range.end),
+        orderBy('date','asc')
+      ];
+      const mapSnap=snap=>snap.docs.map(docSnap=>{
+        const data={id:docSnap.id,...docSnap.data()};
+        if(!data.classId&&currentClassId&&currentUser&&data.ownerUid===currentUser.uid){
+          data.classId=currentClassId;
+        }
+        return data;
+      });
+      const indexError=err=>err?.code==='failed-precondition'||/index/i.test(err?.message||'');
       if(!student){
-        const snap=await getDocs(query(notesCol,...baseConstraints));
-        return mapSnap(snap);
+        try{
+          const snap=await getDocs(query(notesColRef,...baseConstraints));
+          return mapSnap(snap);
+        }catch(err){
+          if(indexError(err)){
+            const snap=await getDocs(query(notesColRef,where('classId','==',currentClassId)));
+            return mapSnap(snap).filter(r=>r.date>=range.start&&r.date<=range.end);
+          }
+          throw err;
+        }
       }
       try{
-        const snap=await getDocs(query(notesCol,where('student','==',student),...baseConstraints));
+        const snap=await getDocs(query(notesColRef,where('student','==',student),...baseConstraints));
         return mapSnap(snap);
       }catch(err){
         // fallback if composite index is missing
-        if(err?.code==='failed-precondition'||/index/i.test(err?.message||'')){
-          const snap=await getDocs(query(notesCol,...baseConstraints));
-          return mapSnap(snap).filter(r=>r.student===student);
+        if(indexError(err)){
+          const snap=await getDocs(query(notesColRef,where('classId','==',currentClassId)));
+          return mapSnap(snap).filter(r=>r.student===student&&r.date>=range.start&&r.date<=range.end);
         }
         throw err;
       }
@@ -405,12 +664,30 @@
     });
     renderMonthlyReport();
     updateReportDownloadLabel();
+    populateStudents([]);
+    setFormDisabled(true);
+    updateClassHint(null);
+    updateClassStatus('Select a class to get started.');
+    updateClassPathLabelText(null);
+    renderClassSelect(null);
+
+    classSelect?.addEventListener('change',()=>{
+      const value=classSelect.value;
+      if(value){
+        setCurrentClass(value);
+      }
+    });
+    newClassBtn?.addEventListener('click',handleCreateClass);
+    joinClassBtn?.addEventListener('click',handleJoinClass);
+    addStudentBtn?.addEventListener('click',handleAddStudent);
+    inputs.student.addEventListener('change',()=>maybeLoadTodaysEntry(inputs.student.value));
 
     function renderHistory(rows){
       historyBody.innerHTML='';
       if(!rows.length){
         emptyState.classList.remove('hidden');
-        countInfo.textContent='0 notes';
+        const classLabel=currentClassName||'this class';
+        countInfo.textContent=`0 notes in ${classLabel}`;
         return;
       }
       emptyState.classList.add('hidden');
@@ -430,7 +707,8 @@
           </td>`;
         historyBody.appendChild(tr);
       });
-      countInfo.textContent=`${rows.length} note${rows.length===1?'':'s'} shown`;
+      const classLabel=currentClassName||'this class';
+      countInfo.textContent=`${rows.length} note${rows.length===1?'':'s'} in ${classLabel}`;
     }
 
     async function renderMonthlyReport(){
@@ -448,6 +726,11 @@
       }
       reportTableWrapper.classList.add('hidden');
       reportEmpty.classList.remove('hidden');
+
+      if(!currentClassId){
+        reportEmptyText.textContent='Select a class to see monthly reports.';
+        return;
+      }
 
       if(!student){reportEmptyText.textContent='Select a student to see their monthly report.';return;}
       if(!monthValue){reportEmptyText.textContent='Choose a month to view the report.';return;}
@@ -502,7 +785,7 @@
     }
 
     async function downloadMonthlyReport(){
-      if(!currentReportRows.length||!reportStudent||!reportMonth||!reportDownload)return;
+      if(!currentClassId||!currentReportRows.length||!reportStudent||!reportMonth||!reportDownload)return;
       const student=reportStudent.value;
       const monthValue=reportMonth.value;
       if(!student||!monthValue)return;
@@ -655,29 +938,342 @@
       return jsPdfModulePromise;
     }
 
+    function renderClassSelect(selectedId){
+      if(!classSelect)return;
+      classSelect.innerHTML='';
+      if(!currentUser){
+        const option=document.createElement('option');
+        option.value='';
+        option.textContent='Sign in to load classes…';
+        option.disabled=true;
+        option.selected=true;
+        classSelect.appendChild(option);
+        classSelect.disabled=true;
+        return;
+      }
+      if(!userClasses.length){
+        const option=document.createElement('option');
+        option.value='';
+        option.textContent='No classes yet';
+        option.disabled=true;
+        option.selected=true;
+        classSelect.appendChild(option);
+        classSelect.disabled=true;
+        return;
+      }
+      const placeholder=document.createElement('option');
+      placeholder.value='';
+      placeholder.textContent='Select a class…';
+      placeholder.disabled=true;
+      classSelect.appendChild(placeholder);
+      userClasses.forEach(cls=>{
+        const option=document.createElement('option');
+        option.value=cls.id;
+        option.textContent=cls.name||cls.id;
+        classSelect.appendChild(option);
+      });
+      classSelect.disabled=false;
+      if(selectedId&&userClasses.some(c=>c.id===selectedId)){
+        classSelect.value=selectedId;
+      }else if(currentClassId&&userClasses.some(c=>c.id===currentClassId)){
+        classSelect.value=currentClassId;
+      }else if(userClasses.length){
+        classSelect.value=userClasses[0].id;
+      }else{
+        placeholder.selected=true;
+      }
+    }
+
+    function watchUserClasses(uid){
+      if(classesUnsub){classesUnsub();classesUnsub=null;}
+      userClasses=[];
+      renderClassSelect(null);
+      if(!uid){
+        setCurrentClass(null);
+        return;
+      }
+      const classesQuery=query(notesColRef,where('members','array-contains',uid));
+      classesUnsub=onSnapshot(classesQuery,(snap)=>{
+        userClasses=snap.docs
+          .map(docSnap=>({id:docSnap.id,...docSnap.data()}))
+          .filter(cls=>Array.isArray(cls.members))
+          .sort((a,b)=>{
+            const nameA=(a.name||a.id||'').toLowerCase();
+            const nameB=(b.name||b.id||'').toLowerCase();
+            return nameA.localeCompare(nameB);
+          });
+        const availableIds=userClasses.map(c=>c.id);
+        let desired=null;
+        if(preferredClassAfterCreation&&availableIds.includes(preferredClassAfterCreation)){
+          desired=preferredClassAfterCreation;
+          preferredClassAfterCreation=null;
+        }
+        if(currentClassId&&availableIds.includes(currentClassId)){
+          desired=currentClassId;
+        }else if(availableIds.length){
+          desired=availableIds[0];
+        }
+        renderClassSelect(desired);
+        if(desired!==currentClassId){
+          setCurrentClass(desired||null);
+        }else if(!desired){
+          setCurrentClass(null);
+        }
+      },(err)=>{
+        console.error('Failed to load classes',err);
+        showToast('Unable to load classes','error');
+      });
+    }
+
+    function resetAppState(){
+      if(unsub){unsub();unsub=null;}
+      if(classDocUnsub){classDocUnsub();classDocUnsub=null;}
+      currentClassId=null;
+      currentClassName='';
+      userClasses=[];
+      historyRows=[];
+      currentReportRows=[];
+      reportInfo.textContent='';
+      renderHistory([]);
+      reportTableWrapper.classList.add('hidden');
+      reportEmpty.classList.remove('hidden');
+      reportEmptyText.textContent='Select a class to see monthly reports.';
+      filterStudent.value='';
+      filterDate.value='';
+      if(reportStudent)reportStudent.value='';
+      pendingStudentSelection=null;
+      preferredClassAfterCreation=null;
+      setEditMode(null);
+      populateStudents([]);
+      setFormDisabled(true);
+      updateClassPathLabelText(null);
+      updateClassHint(null);
+      updateClassStatus('Select a class to get started.');
+      updateReportDownloadLabel();
+    }
+
+    function setCurrentClass(classId){
+      if(classId===currentClassId)return;
+      if(unsub){unsub();unsub=null;}
+      if(classDocUnsub){classDocUnsub();classDocUnsub=null;}
+      currentClassId=classId||null;
+      currentClassName='';
+      historyRows=[];
+      currentReportRows=[];
+      reportInfo.textContent='';
+      renderHistory([]);
+      saveStatus.textContent='';
+      filterStudent.value='';
+      filterDate.value='';
+      if(reportStudent)reportStudent.value='';
+      pendingStudentSelection=null;
+      updateClassPathLabelText(currentClassId);
+      updateClassHint(currentClassId);
+      if(!currentClassId){
+        setEditMode(null);
+        populateStudents([]);
+        setFormDisabled(true);
+        updateClassStatus(userClasses.length?'Select a class to get started.':'No classes yet — create or join one.');
+        reportEmptyText.textContent='Select a class to see monthly reports.';
+        return;
+      }
+      if(classSelect&&classSelect.value!==currentClassId){
+        classSelect.value=currentClassId;
+      }
+      const classRef=doc(notesColRef,currentClassId);
+      setEditMode(null);
+      setFormDisabled(false);
+      updateClassStatus('Loading class…');
+      classDocUnsub=onSnapshot(classRef,(snap)=>{
+        if(!snap.exists()){
+          updateClassStatus('Class not found.');
+          populateStudents([]);
+          setFormDisabled(true);
+          if(classHint)classHint.textContent='This class does not exist yet. Create it to get started.';
+          return;
+        }
+        const data=snap.data();
+        currentClassName=data.name||currentClassId;
+        updateClassStatus(`Working in ${currentClassName}`);
+        updateClassHint(currentClassId,currentClassName);
+        const members=Array.isArray(data.members)?data.members:[];
+        if(currentUser&&!members.includes(currentUser.uid)){
+          updateClassStatus('You no longer have access to this class.');
+          populateStudents([]);
+          setFormDisabled(true);
+          return;
+        }
+        populateStudents(Array.isArray(data.students)?data.students:[]);
+      },(err)=>{
+        console.error('Failed to load class',err);
+        showToast('Unable to load class','error');
+      });
+      reportEmptyText.textContent='Select a student to see their monthly report.';
+      startHistoryStream();
+      applyFilters();
+      renderMonthlyReport();
+    }
+
+    async function createClassForUser(user,className,{select=true}={}){
+      if(!user)throw new Error('Sign in required.');
+      const trimmed=className?.trim();
+      if(!trimmed)throw new Error('Class name is required.');
+      const classRef=doc(notesColRef);
+      const payload={
+        name:trimmed,
+        createdAt:serverTimestamp(),
+        ownerUid:user.uid||null,
+        members:[user.uid],
+        students:[],
+        type:'class'
+      };
+      await setDoc(classRef,payload);
+      if(select)preferredClassAfterCreation=classRef.id;
+      return {id:classRef.id,name:trimmed};
+    }
+
+    async function handleCreateClass(){
+      if(!currentUser){showToast('Sign in to create a class.','error');return;}
+      const name=prompt('Name for the new class?');
+      if(name===null)return;
+      const trimmed=name.trim();
+      if(!trimmed){showToast('Class name is required.','error');return;}
+      const existing=userClasses.find(c=>(c.name||'').toLowerCase()===trimmed.toLowerCase());
+      if(existing){
+        setCurrentClass(existing.id);
+        showToast('Switched to existing class ✓','success');
+        return;
+      }
+      try{
+        const created=await createClassForUser(currentUser,trimmed);
+        showToast('Class created ✓','success');
+        setCurrentClass(created.id);
+      }catch(err){
+        console.error(err);
+        showToast(err?.message||'Unable to create class','error');
+      }
+    }
+
+    async function handleJoinClass(){
+      if(!currentUser){showToast('Sign in to join a class.','error');return;}
+      const code=prompt('Enter the class code to join');
+      if(code===null)return;
+      const trimmed=code.trim();
+      if(!trimmed){showToast('Class code is required.','error');return;}
+      const classRef=doc(notesColRef,trimmed);
+      const snap=await getDoc(classRef);
+      if(!snap.exists()){
+        showToast('Class not found.','error');
+        return;
+      }
+      const data=snap.data();
+      if(data?.type&&data.type!=='class'){
+        showToast('Class code is not valid.','error');
+        return;
+      }
+      const members=Array.isArray(data?.members)?data.members:[];
+      if(members.includes(currentUser.uid)){
+        showToast('You already joined this class.','success');
+        setCurrentClass(classRef.id);
+        return;
+      }
+      try{
+        await updateDoc(classRef,{members:arrayUnion(currentUser.uid)});
+        showToast('Joined class ✓','success');
+        preferredClassAfterCreation=classRef.id;
+        setCurrentClass(classRef.id);
+      }catch(err){
+        console.error(err);
+        showToast('Unable to join class.','error');
+      }
+    }
+
+    async function handleAddStudent(){
+      if(!currentClassId){showToast('Select a class first.','error');return;}
+      const name=prompt('Student name');
+      if(name===null)return;
+      const trimmed=name.trim();
+      if(!trimmed){showToast('Student name is required.','error');return;}
+      if(classStudents.some(s=>s.toLowerCase()===trimmed.toLowerCase())){
+        showToast('Student already exists.','error');
+        return;
+      }
+      const classRef=doc(notesColRef,currentClassId);
+      try{
+        pendingStudentSelection=trimmed;
+        await updateDoc(classRef,{students:arrayUnion(trimmed)});
+        showToast('Student added ✓','success');
+      }catch(err){
+        console.error(err);
+        showToast('Unable to add student.','error');
+      }
+    }
+
+    async function maybeLoadTodaysEntry(student){
+      if(!student||!currentClassId)return;
+      const expectedClassId=currentClassId;
+      const selectionToken=student;
+      const today=toLocalISODate(new Date());
+      const id=noteId(expectedClassId,today,student);
+      try{
+        let snap=await getDoc(doc(notesColRef,id));
+        if(!snap.exists()){
+          const legacyId=legacyNoteId(today,student);
+          if(legacyId&&legacyId!==id){
+            snap=await getDoc(doc(notesColRef,legacyId));
+          }
+        }
+        if(currentClassId!==expectedClassId)return;
+        if(inputs.student.value!==selectionToken)return;
+        if(snap.exists()){
+          const data=snap.data();
+          if(data&&!data.classId&&currentClassId){
+            updateDoc(doc(notesColRef,snap.id),{classId:currentClassId,type:'note'}).catch(err=>console.warn('Failed to backfill classId',err));
+          }
+          setEditMode({...data,id:snap.id});
+        }else if(editingKey){
+          setEditMode(null,{preserveStudent:true});
+        }
+      }catch(err){
+        console.error('Failed to load daily entry',err);
+      }
+    }
+
     historyBody.addEventListener('click',async(e)=>{
       const btn=e.target.closest('button'); if(!btn) return;
+      if(!currentClassId)return;
       const id=btn.getAttribute('data-id');
       if(btn.getAttribute('data-action')==='edit'){
-        const snap=await getDoc(doc(notesCol,id));
-        if(snap.exists()) setEditMode(snap.data());
+        const snap=await getDoc(doc(notesColRef,id));
+        if(snap.exists()){
+          const data=snap.data();
+          if(data&&!data.classId&&currentClassId){
+            updateDoc(doc(notesColRef,id),{classId:currentClassId,type:'note'}).catch(err=>console.warn('Failed to backfill classId',err));
+          }
+          setEditMode({id:snap.id,...data});
+        }
       } else if(btn.getAttribute('data-action')==='delete'){
         if(!confirm('Delete this note?')) return;
-        await deleteDoc(doc(notesCol,id));
+        await deleteDoc(doc(notesColRef,id));
         showToast('Deleted','success');
       }
     });
 
     // Auth gate
     onAuthStateChanged(auth,(user)=>{
+      currentUser=user||null;
       if(user){
         authGate.classList.add('hidden');
         appShell.classList.remove('hidden');
         whoami.textContent=user.email||user.uid;
         authStatus.textContent='Online';
         dot.className='w-2 h-2 rounded-full bg-emerald-400';
-        startHistoryStream();
+        updateClassStatus('Loading classes…');
+        watchUserClasses(user.uid);
       } else {
+        if(classesUnsub){classesUnsub();classesUnsub=null;}
+        resetAppState();
+        renderClassSelect(null);
         appShell.classList.add('hidden');
         authGate.classList.remove('hidden');
         whoami.textContent='Not signed in';
@@ -687,7 +1283,11 @@
     });
 
     // Utils
-    function extractDateFromId(id){if(!id)return null;const m=String(id).match(/^(\d{4}-\d{2}-\d{2})_/);return m?m[1]:null;}
+    function extractDateFromId(id){
+      if(!id)return null;
+      const m=String(id).match(/(\d{4}-\d{2}-\d{2})/);
+      return m?m[1]:null;
+    }
     function parseDate(input){
       if(!input&&input!==0)return null;
       if(input instanceof Date)return isNaN(input.getTime())?null:input;
