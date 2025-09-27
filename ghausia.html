@@ -47,7 +47,7 @@
     <!-- Header -->
     <header class="text-center mb-10">
       <div class="float">
-        <h1 class="text-5xl md:text-6xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-emerald-600">Ghausia Class Track</h1>
+        <h1 id="mainTitle" class="text-5xl md:text-6xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-emerald-600">Ghausia Class Track</h1>
         <div class="w-24 h-1 gradient-animated mx-auto mt-4 rounded-full"></div>
         <p class="mt-4 text-slate-600 dark:text-slate-400">Beautiful, responsive progress tracking for your class.</p>
         <p class="mt-2 text-sm"><span id="authStatus" class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/70 dark:bg-slate-800/70 ring-1 ring-slate-200 dark:ring-slate-700"><span class="w-2 h-2 rounded-full bg-amber-400" id="dot"></span> <span id="whoami">Not signed in</span> • <span id="todayDisplay"></span></span></p>
@@ -428,6 +428,7 @@
     const emptyState=document.getElementById('emptyState');
     const countInfo=document.getElementById('countInfo');
     const formTitle=document.getElementById('formTitle');
+    const mainTitle=document.getElementById('mainTitle');
     const cancelEditBtn=document.getElementById('cancelEditBtn');
     const saveBtn=document.getElementById('saveBtn');
     const saveText=document.getElementById('saveText');
@@ -786,6 +787,8 @@
       currentClassId = classId;
       await loadCurrentClass();
       currentClassName.textContent = className;
+      mainTitle.textContent = `${className} Tracker`;
+      document.title = `${className} Tracker`;
       updateNotesCollection();
       populateStudents();
       updateFormFields(); // Apply field settings
@@ -1535,6 +1538,10 @@
           whoami.textContent = 'Not signed in';
           authStatus.textContent = 'Signed out';
           dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+          
+          // Reset title to default
+          mainTitle.textContent = 'Ghausia Class Track';
+          document.title = 'Ghausia — Class Track';
           
           if (unsub) unsub();
         }
