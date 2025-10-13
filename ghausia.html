@@ -208,14 +208,26 @@
                 </select>
                 <input id="reportMonth" type="month" class="rounded-xl bg-slate-50/80 dark:bg-slate-800/80 border-2 border-slate-200/60 dark:border-slate-700/60 px-4 py-2 text-sm font-medium focus:border-emerald-500" />
                 <select id="reportFormat" class="rounded-xl bg-slate-50/80 dark:bg-slate-800/80 border-2 border-slate-200/60 dark:border-slate-700/60 px-4 py-2 text-sm font-medium focus:border-emerald-500">
-                  <option value="csv" selected>CSV</option>
-                  <option value="pdf">PDF</option>
+                  <option value="csv" selected>CSV (Recommended for Urdu text)</option>
+                  <option value="pdf">PDF (May not display Urdu correctly)</option>
                 </select>
                 <button id="reportDownload" type="button" class="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled>⬇️ Download CSV</button>
               </div>
             </div>
             <div class="p-6 md:p-8 space-y-6">
               <div id="reportInfo" class="text-sm text-slate-600 dark:text-slate-400"></div>
+              <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-sm">
+                <div class="flex items-start gap-2">
+                  <span class="text-blue-600 dark:text-blue-400">ℹ️</span>
+                  <div>
+                    <strong class="text-blue-800 dark:text-blue-200">Urdu Text Support:</strong>
+                    <p class="text-blue-700 dark:text-blue-300 mt-1">
+                      For best results with Urdu/Arabic text, use <strong>CSV format</strong>. 
+                      PDF may display special characters incorrectly due to font limitations.
+                    </p>
+                  </div>
+                </div>
+              </div>
               <div id="reportTableWrapper" class="overflow-x-auto custom-scrollbar hidden">
                 <table class="min-w-full text-left text-sm">
                   <thead class="bg-slate-100/80 dark:bg-slate-800/80">
@@ -1259,6 +1271,9 @@
         });
         if(requestId!==reportRequestToken)return;
 
+        console.log('Rendering monthly report with sorted data:', sorted);
+        console.log('Field settings being used:', getFieldSettings());
+
         reportBody.innerHTML=sorted.map(r=>`
           <tr>
             <td class='px-6 py-3 font-medium'>${esc(formatDisplayDate(r.date))}</td>
@@ -1317,11 +1332,19 @@
 
     function downloadMonthlyCsv(student,monthValue){
       const fieldSettings = getFieldSettings();
+      console.log('Generating CSV with field settings:', fieldSettings);
+      console.log('Current report rows:', currentReportRows);
       
       // Helper function to remove emojis for CSV compatibility
       const cleanLabelForCsv = (label) => {
         return label ? label.replace(/[\u{1F000}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{E000}-\u{F8FF}]|[\u{FE00}-\u{FE0F}]|[\u{200D}]/gu, '').trim() : '';
       };
+      
+      // Ensure we have data to export
+      if (!currentReportRows || currentReportRows.length === 0) {
+        showToast('No data to export for the selected student and month', 'error');
+        return;
+      }
       
       // Build header row with only enabled fields
       const headerRow = ['Date', 'Student'];
@@ -1353,7 +1376,9 @@
         const dataRow = dataExtractors.map(extractor => extractor(r));
         rows.push(dataRow);
       });
-      const csv=rows.map(row=>row.map(toCsvValue).join(',')).join('\r\n');
+      
+      // Add BOM for better Unicode support in Excel and other programs
+      const csv = '\uFEFF' + rows.map(row=>row.map(toCsvValue).join(',')).join('\r\n');
       const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
       const url=URL.createObjectURL(blob);
       const link=document.createElement('a');
@@ -1362,10 +1387,40 @@
       document.body.appendChild(link);
       link.click();
       setTimeout(()=>{URL.revokeObjectURL(url);link.remove();},0);
-      showToast('CSV report downloaded ✓','success');
+      showToast('CSV report downloaded ✓ (with Unicode support)','success');
     }
 
     async function downloadMonthlyPdf(student,monthValue){
+      const fieldSettings = getFieldSettings();
+      console.log('Generating PDF with field settings:', fieldSettings);
+      console.log('Current report rows:', currentReportRows);
+      
+      // Ensure we have data to export
+      if (!currentReportRows || currentReportRows.length === 0) {
+        showToast('No data to export for the selected student and month', 'error');
+        return;
+      }
+      
+      // For Urdu/Arabic text, recommend using CSV instead of PDF
+      const hasUrduText = currentReportRows.some(row => 
+        /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(
+          `${row.quran || ''} ${row.surah || ''} ${row.lawsOfSalah || ''} ${row.qamar || ''} ${row.anythingElse || ''}`
+        )
+      );
+      
+      if (hasUrduText) {
+        const userChoice = confirm(
+          'This report contains Urdu/Arabic text which may not display correctly in PDF format.\n\n' +
+          'Would you like to download as CSV instead for better text compatibility?\n\n' +
+          'Click "OK" for CSV or "Cancel" to continue with PDF (text may appear garbled).'
+        );
+        
+        if (userChoice) {
+          downloadMonthlyCsv(student, monthValue);
+          return;
+        }
+      }
+      
       const module=await ensureJsPdf();
       const jsPdfConstructor=module?.jsPDF||module?.default?.jsPDF||module?.default;
       if(typeof jsPdfConstructor!=='function')throw new Error('PDF library failed to load');
@@ -1421,13 +1476,24 @@
           sections.push([cleanLabelForPdf(fieldSettings.notes?.label) || 'Notes', row.anythingElse]);
         }
         sections.forEach(([label,value])=>{
-          const text=`• ${label}: ${value||'-'}`;
-          const lines=doc.splitTextToSize(text,Math.max(maxWidth-20,0));
-          lines.forEach(line=>{
+          // Clean text for better PDF compatibility
+          const cleanValue = (value || '-').replace(/[\u200E\u200F\u202A-\u202E]/g, ''); // Remove RTL/LTR marks
+          const text=`• ${label}: ${cleanValue}`;
+          
+          try {
+            const lines=doc.splitTextToSize(text,Math.max(maxWidth-20,0));
+            lines.forEach(line=>{
+              if(y>pageHeight-margin){doc.addPage();y=margin;}
+              doc.text(line,margin+20,y);
+              y+=lineHeight;
+            });
+          } catch (textError) {
+            // Fallback for problematic Unicode characters
+            const fallbackText = `• ${label}: [Text contains special characters - see CSV export]`;
             if(y>pageHeight-margin){doc.addPage();y=margin;}
-            doc.text(line,margin+20,y);
+            doc.text(fallbackText,margin+20,y);
             y+=lineHeight;
-          });
+          }
         });
         y+=lineHeight/2;
       });
