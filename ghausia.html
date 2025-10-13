@@ -299,8 +299,14 @@
           <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Customize the labels and visibility of form fields:</p>
           
           <div class="mb-4 p-3 rounded-xl bg-blue-50/80 dark:bg-blue-900/20 border border-blue-200/60 dark:border-blue-700/60">
-            <p class="text-xs text-blue-800 dark:text-blue-200">
+            <p class="text-xs text-blue-800 dark:text-blue-200 mb-2">
               ℹ️ <strong>Historical Labels:</strong> When you change a field name, new entries will use the new name, but existing entries will remember their original field names. Reports will show "(was: Original Name)" to indicate historical data.
+            </p>
+            <button id="updateLegacyLabels" class="text-xs px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium">
+              Update All Old Entries with Current Labels
+            </button>
+            <p class="text-xs text-blue-700 dark:text-blue-300 mt-1">
+              Click this to apply current field names to all existing entries that don't have labels stored.
             </p>
           </div>
           
@@ -359,7 +365,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
-    import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, query, orderBy, where, limit as qLimit, onSnapshot, serverTimestamp, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+    import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, query, orderBy, where, limit as qLimit, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, writeBatch } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
 
     const firebaseConfig = { apiKey:"AIzaSyAS37LFzGqN3YFmT5n3i3qSNXOG8G8R2as", authDomain:"attari2-f55f3.firebaseapp.com", projectId:"attari2-f55f3", storageBucket:"attari2-f55f3.firebasestorage.app", messagingSenderId:"199694820477", appId:"1:199694820477:web:163be13dba7c1878cfbd14" };
 
@@ -762,6 +768,71 @@
       document.getElementById('notesLabel').value = '💭 Additional Notes';
     });
 
+    // Update legacy entries with current field labels
+    document.getElementById('updateLegacyLabels')?.addEventListener('click', async () => {
+      if (!notesCol || !currentClassId) {
+        showToast('No class selected', 'error');
+        return;
+      }
+      
+      const confirmUpdate = confirm(
+        'This will update ALL entries in this class to use the current field names. ' +
+        'This is useful if you want old entries to show with current field names instead of historical ones. ' +
+        'This action cannot be undone. Continue?'
+      );
+      
+      if (!confirmUpdate) return;
+      
+      const updateBtn = document.getElementById('updateLegacyLabels');
+      const originalText = updateBtn.textContent;
+      updateBtn.textContent = 'Updating...';
+      updateBtn.disabled = true;
+      
+      try {
+        const fieldSettings = getFieldSettings();
+        const currentLabels = {
+          quran: fieldSettings.quran?.label || '📖 Quran',
+          surah: fieldSettings.surah?.label || '🕌 Surah',
+          laws: fieldSettings.laws?.label || '🤲 Laws of Salah',
+          qamar: fieldSettings.qamar?.label || '🌙 Qamar',
+          notes: fieldSettings.notes?.label || '💭 Additional Notes'
+        };
+        
+        // Fetch all entries for this class
+        const allEntriesQuery = query(notesCol, orderBy('date', 'desc'), qLimit(500));
+        const snapshot = await getDocs(allEntriesQuery);
+        
+        let updatedCount = 0;
+        const batch = writeBatch(db);
+        
+        snapshot.docs.forEach(docSnap => {
+          const data = docSnap.data();
+          // Only update entries that don't have fieldLabels or have outdated ones
+          if (!data.fieldLabels) {
+            batch.update(docSnap.ref, {
+              fieldLabels: currentLabels,
+              updatedAt: serverTimestamp()
+            });
+            updatedCount++;
+          }
+        });
+        
+        if (updatedCount > 0) {
+          await batch.commit();
+          showToast(`Updated ${updatedCount} entries with current field labels`, 'success');
+        } else {
+          showToast('All entries already have field labels', 'success');
+        }
+        
+      } catch (error) {
+        console.error('Error updating legacy labels:', error);
+        showToast('Failed to update entries', 'error');
+      } finally {
+        updateBtn.textContent = originalText;
+        updateBtn.disabled = false;
+      }
+    });
+
     // Class and Student Display Functions
     async function loadAndDisplayClasses() {
       if (!currentUser) {
@@ -1068,18 +1139,6 @@
       const id=editingKey||noteId(entryDate,student);
       const ref=doc(notesCol,id);
       
-      // Check if entry already exists for this date/student combination (only for new entries)
-      if (!editingKey) {
-        const existingSnap = await getDoc(ref);
-        if (existingSnap.exists()) {
-          const confirmOverwrite = confirm(`An entry already exists for ${student} on ${formatDisplayDate(entryDate)}. Do you want to update it?`);
-          if (!confirmOverwrite) {
-            saveSpinner.classList.add('hidden');
-            return;
-          }
-        }
-      }
-      
       // Get current field labels to store with the entry
       const fieldSettings = getFieldSettings();
       
@@ -1094,19 +1153,49 @@
         anythingElse:inputs.anything.value.trim(),
         updatedAt:serverTimestamp(),
         ownerUid:auth.currentUser?.uid||null,
-        classId:currentClassId,
-        // Store field labels at the time of entry creation
-        fieldLabels: {
-          quran: fieldSettings.quran?.label || '📖 Quran',
-          surah: fieldSettings.surah?.label || '🕌 Surah',
-          laws: fieldSettings.laws?.label || '🤲 Laws of Salah',
-          qamar: fieldSettings.qamar?.label || '🌙 Qamar',
-          notes: fieldSettings.notes?.label || '💭 Additional Notes'
-        }
+        classId:currentClassId
       };
+      
       try {
+        // Check if entry already exists
         const snap=await getDoc(ref);
-        if(!snap.exists())payload.createdAt=serverTimestamp();
+        
+        // Check for existing entry conflict (only for new entries, not edits)
+        if (!editingKey && snap.exists()) {
+          const confirmOverwrite = confirm(`An entry already exists for ${student} on ${formatDisplayDate(entryDate)}. Do you want to update it?`);
+          if (!confirmOverwrite) {
+            saveSpinner.classList.add('hidden');
+            return;
+          }
+        }
+        
+        // Handle field labels for new vs existing entries
+        if(!snap.exists()){
+          // New entry - store current field labels and creation time
+          payload.createdAt=serverTimestamp();
+          payload.fieldLabels = {
+            quran: fieldSettings.quran?.label || '📖 Quran',
+            surah: fieldSettings.surah?.label || '🕌 Surah',
+            laws: fieldSettings.laws?.label || '🤲 Laws of Salah',
+            qamar: fieldSettings.qamar?.label || '🌙 Qamar',
+            notes: fieldSettings.notes?.label || '💭 Additional Notes'
+          };
+        } else {
+          // Existing entry - preserve original field labels if they exist
+          const existingData = snap.data();
+          if (existingData.fieldLabels) {
+            payload.fieldLabels = existingData.fieldLabels;
+          } else {
+            // Legacy entry without fieldLabels - use current labels as best guess
+            payload.fieldLabels = {
+              quran: fieldSettings.quran?.label || '📖 Quran',
+              surah: fieldSettings.surah?.label || '🕌 Surah',
+              laws: fieldSettings.laws?.label || '🤲 Laws of Salah',
+              qamar: fieldSettings.qamar?.label || '🌙 Qamar',
+              notes: fieldSettings.notes?.label || '💭 Additional Notes'
+            };
+          }
+        }
         await setDoc(ref,payload,{merge:true});
         saveSpinner.classList.add('hidden');
         showToast(editingKey?'Updated ✓':'Saved ✓','success');
