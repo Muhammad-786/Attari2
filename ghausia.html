@@ -298,18 +298,6 @@
           <h4 class="text-lg font-semibold mb-4">Customize Form Fields</h4>
           <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Customize the labels and visibility of form fields:</p>
           
-          <div class="mb-4 p-3 rounded-xl bg-blue-50/80 dark:bg-blue-900/20 border border-blue-200/60 dark:border-blue-700/60">
-            <p class="text-xs text-blue-800 dark:text-blue-200 mb-2">
-              ℹ️ <strong>Historical Labels:</strong> When you change a field name, new entries will use the new name, but existing entries will remember their original field names. Reports will show "(was: Original Name)" to indicate historical data.
-            </p>
-            <button id="updateLegacyLabels" class="text-xs px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium">
-              Update All Old Entries with Current Labels
-            </button>
-            <p class="text-xs text-blue-700 dark:text-blue-300 mt-1">
-              Click this to apply current field names to all existing entries that don't have labels stored.
-            </p>
-          </div>
-          
           <div class="space-y-4">
             <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60">
               <div class="flex items-center gap-3">
@@ -365,7 +353,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
-    import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, query, orderBy, where, limit as qLimit, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, writeBatch } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+    import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, query, orderBy, where, limit as qLimit, onSnapshot, serverTimestamp, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
 
     const firebaseConfig = { apiKey:"AIzaSyAS37LFzGqN3YFmT5n3i3qSNXOG8G8R2as", authDomain:"attari2-f55f3.firebaseapp.com", projectId:"attari2-f55f3", storageBucket:"attari2-f55f3.firebasestorage.app", messagingSenderId:"199694820477", appId:"1:199694820477:web:163be13dba7c1878cfbd14" };
 
@@ -768,71 +756,6 @@
       document.getElementById('notesLabel').value = '💭 Additional Notes';
     });
 
-    // Update legacy entries with current field labels
-    document.getElementById('updateLegacyLabels')?.addEventListener('click', async () => {
-      if (!notesCol || !currentClassId) {
-        showToast('No class selected', 'error');
-        return;
-      }
-      
-      const confirmUpdate = confirm(
-        'This will update ALL entries in this class to use the current field names. ' +
-        'This is useful if you want old entries to show with current field names instead of historical ones. ' +
-        'This action cannot be undone. Continue?'
-      );
-      
-      if (!confirmUpdate) return;
-      
-      const updateBtn = document.getElementById('updateLegacyLabels');
-      const originalText = updateBtn.textContent;
-      updateBtn.textContent = 'Updating...';
-      updateBtn.disabled = true;
-      
-      try {
-        const fieldSettings = getFieldSettings();
-        const currentLabels = {
-          quran: fieldSettings.quran?.label || '📖 Quran',
-          surah: fieldSettings.surah?.label || '🕌 Surah',
-          laws: fieldSettings.laws?.label || '🤲 Laws of Salah',
-          qamar: fieldSettings.qamar?.label || '🌙 Qamar',
-          notes: fieldSettings.notes?.label || '💭 Additional Notes'
-        };
-        
-        // Fetch all entries for this class
-        const allEntriesQuery = query(notesCol, orderBy('date', 'desc'), qLimit(500));
-        const snapshot = await getDocs(allEntriesQuery);
-        
-        let updatedCount = 0;
-        const batch = writeBatch(db);
-        
-        snapshot.docs.forEach(docSnap => {
-          const data = docSnap.data();
-          // Only update entries that don't have fieldLabels or have outdated ones
-          if (!data.fieldLabels) {
-            batch.update(docSnap.ref, {
-              fieldLabels: currentLabels,
-              updatedAt: serverTimestamp()
-            });
-            updatedCount++;
-          }
-        });
-        
-        if (updatedCount > 0) {
-          await batch.commit();
-          showToast(`Updated ${updatedCount} entries with current field labels`, 'success');
-        } else {
-          showToast('All entries already have field labels', 'success');
-        }
-        
-      } catch (error) {
-        console.error('Error updating legacy labels:', error);
-        showToast('Failed to update entries', 'error');
-      } finally {
-        updateBtn.textContent = originalText;
-        updateBtn.disabled = false;
-      }
-    });
-
     // Class and Student Display Functions
     async function loadAndDisplayClasses() {
       if (!currentUser) {
@@ -1139,8 +1062,26 @@
       const id=editingKey||noteId(entryDate,student);
       const ref=doc(notesCol,id);
       
-      // Get current field labels to store with the entry
-      const fieldSettings = getFieldSettings();
+      // Check if entry already exists for this date/student combination (only for new entries)
+      if (!editingKey) {
+        const existingSnap = await getDoc(ref);
+        if (existingSnap.exists()) {
+          const confirmOverwrite = confirm(`An entry already exists for ${student} on ${formatDisplayDate(entryDate)}. Do you want to update it?`);
+          if (!confirmOverwrite) {
+            saveSpinner.classList.add('hidden');
+            return;
+          }
+        }
+      }
+      
+      // Capture current field labels at the time of entry
+      const currentFieldLabels = {
+        quran: getFieldSettings().quran?.label || '📖 Quran',
+        surah: getFieldSettings().surah?.label || '🕌 Surah',
+        laws: getFieldSettings().laws?.label || '🤲 Laws of Salah',
+        qamar: getFieldSettings().qamar?.label || '🌙 Qamar',
+        notes: getFieldSettings().notes?.label || '💭 Additional Notes'
+      };
       
       const payload={
         id,
@@ -1151,51 +1092,14 @@
         lawsOfSalah:inputs.laws.value.trim(),
         qamar:inputs.qamar.value.trim(),
         anythingElse:inputs.anything.value.trim(),
+        fieldLabels:currentFieldLabels, // Store the labels used at creation time
         updatedAt:serverTimestamp(),
         ownerUid:auth.currentUser?.uid||null,
         classId:currentClassId
       };
-      
       try {
-        // Check if entry already exists
         const snap=await getDoc(ref);
-        
-        // Check for existing entry conflict (only for new entries, not edits)
-        if (!editingKey && snap.exists()) {
-          const confirmOverwrite = confirm(`An entry already exists for ${student} on ${formatDisplayDate(entryDate)}. Do you want to update it?`);
-          if (!confirmOverwrite) {
-            saveSpinner.classList.add('hidden');
-            return;
-          }
-        }
-        
-        // Handle field labels for new vs existing entries
-        if(!snap.exists()){
-          // New entry - store current field labels and creation time
-          payload.createdAt=serverTimestamp();
-          payload.fieldLabels = {
-            quran: fieldSettings.quran?.label || '📖 Quran',
-            surah: fieldSettings.surah?.label || '🕌 Surah',
-            laws: fieldSettings.laws?.label || '🤲 Laws of Salah',
-            qamar: fieldSettings.qamar?.label || '🌙 Qamar',
-            notes: fieldSettings.notes?.label || '💭 Additional Notes'
-          };
-        } else {
-          // Existing entry - preserve original field labels if they exist
-          const existingData = snap.data();
-          if (existingData.fieldLabels) {
-            payload.fieldLabels = existingData.fieldLabels;
-          } else {
-            // Legacy entry without fieldLabels - use current labels as best guess
-            payload.fieldLabels = {
-              quran: fieldSettings.quran?.label || '📖 Quran',
-              surah: fieldSettings.surah?.label || '🕌 Surah',
-              laws: fieldSettings.laws?.label || '🤲 Laws of Salah',
-              qamar: fieldSettings.qamar?.label || '🌙 Qamar',
-              notes: fieldSettings.notes?.label || '💭 Additional Notes'
-            };
-          }
-        }
+        if(!snap.exists())payload.createdAt=serverTimestamp();
         await setDoc(ref,payload,{merge:true});
         saveSpinner.classList.add('hidden');
         showToast(editingKey?'Updated ✓':'Saved ✓','success');
@@ -1301,31 +1205,16 @@
         return;
       }
       emptyState.classList.add('hidden');
-      
-      const currentFieldSettings = getFieldSettings();
-      
-      // Helper to format cell with historical label indicator
-      const formatHistoryCell = (value, historicalLabel, currentLabel) => {
-        if (!value) return '';
-        const cleanHistorical = (historicalLabel || '').replace(/[\u{1F000}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{E000}-\u{F8FF}]|[\u{FE00}-\u{FE0F}]|[\u{200D}]/gu, '').trim();
-        const cleanCurrent = (currentLabel || '').replace(/[\u{1F000}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{E000}-\u{F8FF}]|[\u{FE00}-\u{FE0F}]|[\u{200D}]/gu, '').trim();
-        
-        if (cleanHistorical && cleanCurrent && cleanHistorical !== cleanCurrent) {
-          return `${esc(value)} <span class="text-xs text-slate-500" title="Original field name: ${esc(cleanHistorical)}">(was: ${esc(cleanHistorical)})</span>`;
-        }
-        return esc(value);
-      };
-      
       rows.forEach(r=>{
         const tr=document.createElement('tr');
         tr.innerHTML=`
           <td class='px-6 py-3 font-medium'>${esc(formatDisplayDate(r.date))}</td>
           <td class='px-6 py-3'>${esc(r.student||'')}</td>
-          <td class='px-6 py-3'>${formatHistoryCell(r.quran, r.fieldLabels?.quran, currentFieldSettings.quran?.label)}</td>
-          <td class='px-6 py-3'>${formatHistoryCell(r.surah, r.fieldLabels?.surah, currentFieldSettings.surah?.label)}</td>
-          <td class='px-6 py-3'>${formatHistoryCell(r.lawsOfSalah, r.fieldLabels?.laws, currentFieldSettings.laws?.label)}</td>
-          <td class='px-6 py-3'>${formatHistoryCell(r.qamar, r.fieldLabels?.qamar, currentFieldSettings.qamar?.label)}</td>
-          <td class='px-6 py-3'>${formatHistoryCell(r.anythingElse, r.fieldLabels?.notes, currentFieldSettings.notes?.label)}</td>
+          <td class='px-6 py-3'>${esc(r.quran||'')}</td>
+          <td class='px-6 py-3'>${esc(r.surah||'')}</td>
+          <td class='px-6 py-3'>${esc(r.lawsOfSalah||'')}</td>
+          <td class='px-6 py-3'>${esc(r.qamar||'')}</td>
+          <td class='px-6 py-3'>${esc(r.anythingElse||'')}</td>
           <td class='px-6 py-3 whitespace-nowrap'>
             <button class='px-2 py-1 text-xs rounded-lg ring-1 ring-slate-300 mr-2 hover:bg-slate-100 dark:hover:bg-slate-800' data-action='edit' data-id='${r.id}'>Edit</button>
             <button class='px-2 py-1 text-xs rounded-lg ring-1 ring-red-300 text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20' data-action='delete' data-id='${r.id}'>Delete</button>
@@ -1380,32 +1269,17 @@
         });
         if(requestId!==reportRequestToken)return;
 
-        console.log('Rendering monthly report with sorted data:', sorted);
-        console.log('Field settings being used:', getFieldSettings());
-
-        const currentFieldSettings = getFieldSettings();
-        
         reportBody.innerHTML=sorted.map(r=>{
-          // Helper to format cell with historical label indicator
-          const formatCell = (value, historicalLabel, currentLabel) => {
-            if (!value) return '';
-            const cleanHistorical = (historicalLabel || '').replace(/[\u{1F000}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{E000}-\u{F8FF}]|[\u{FE00}-\u{FE0F}]|[\u{200D}]/gu, '').trim();
-            const cleanCurrent = (currentLabel || '').replace(/[\u{1F000}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{E000}-\u{F8FF}]|[\u{FE00}-\u{FE0F}]|[\u{200D}]/gu, '').trim();
-            
-            if (cleanHistorical && cleanCurrent && cleanHistorical !== cleanCurrent) {
-              return `${esc(value)} <span class="text-xs text-slate-500" title="Original field name: ${esc(cleanHistorical)}">(was: ${esc(cleanHistorical)})</span>`;
-            }
-            return esc(value);
-          };
-          
+          // Use stored field labels if available, otherwise use current settings
+          const entryLabels = r.fieldLabels || getFieldSettings();
           return `
-          <tr>
+          <tr data-entry-labels='${JSON.stringify(entryLabels).replace(/'/g, "&apos;")}'>
             <td class='px-6 py-3 font-medium'>${esc(formatDisplayDate(r.date))}</td>
-            <td class='px-6 py-3'>${formatCell(r.quran, r.fieldLabels?.quran, currentFieldSettings.quran?.label)}</td>
-            <td class='px-6 py-3'>${formatCell(r.surah, r.fieldLabels?.surah, currentFieldSettings.surah?.label)}</td>
-            <td class='px-6 py-3'>${formatCell(r.lawsOfSalah, r.fieldLabels?.laws, currentFieldSettings.laws?.label)}</td>
-            <td class='px-6 py-3'>${formatCell(r.qamar, r.fieldLabels?.qamar, currentFieldSettings.qamar?.label)}</td>
-            <td class='px-6 py-3'>${formatCell(r.anythingElse, r.fieldLabels?.notes, currentFieldSettings.notes?.label)}</td>
+            <td class='px-6 py-3'>${esc(r.quran||'')}</td>
+            <td class='px-6 py-3'>${esc(r.surah||'')}</td>
+            <td class='px-6 py-3'>${esc(r.lawsOfSalah||'')}</td>
+            <td class='px-6 py-3'>${esc(r.qamar||'')}</td>
+            <td class='px-6 py-3'>${esc(r.anythingElse||'')}</td>
           </tr>`;
         }).join('');
 
@@ -1456,90 +1330,47 @@
     }
 
     function downloadMonthlyCsv(student,monthValue){
-      const fieldSettings = getFieldSettings();
-      console.log('Generating CSV with field settings:', fieldSettings);
-      console.log('Current report rows:', currentReportRows);
+      const currentSettings = getFieldSettings();
       
       // Helper function to remove emojis for CSV compatibility
       const cleanLabelForCsv = (label) => {
         return label ? label.replace(/[\u{1F000}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{E000}-\u{F8FF}]|[\u{FE00}-\u{FE0F}]|[\u{200D}]/gu, '').trim() : '';
       };
       
-      // Ensure we have data to export
-      if (!currentReportRows || currentReportRows.length === 0) {
-        showToast('No data to export for the selected student and month', 'error');
-        return;
-      }
+      // Build CSV with historical labels for each entry
+      const rows = [['Date', 'Student', 'Field', 'Value']]; // Changed to a more flexible format
       
-      // Helper to get historical label for a row
-      const getHistoricalLabel = (row, fieldName, defaultLabel) => {
-        return row.fieldLabels?.[fieldName] || defaultLabel;
-      };
-      
-      // Build header row with column names that include historical context
-      const headerRow = ['Date', 'Student'];
-      const dataRows = [];
-      
-      // For each row, we'll create columns based on the enabled fields
-      currentReportRows.forEach((r, idx) => {
-        const dataRow = [formatDisplayDate(r.date), r.student || ''];
+      currentReportRows.forEach(r => {
+        // Use stored field labels if available, otherwise use current settings
+        const entryLabels = r.fieldLabels || {
+          quran: currentSettings.quran?.label || '📖 Quran',
+          surah: currentSettings.surah?.label || '🕌 Surah',
+          laws: currentSettings.laws?.label || '🤲 Laws of Salah',
+          qamar: currentSettings.qamar?.label || '🌙 Qamar',
+          notes: currentSettings.notes?.label || '💭 Additional Notes'
+        };
         
-        // On first row, build headers based on historical labels
-        if (idx === 0) {
-          if (fieldSettings.quran?.enabled !== false) {
-            headerRow.push(cleanLabelForCsv(getHistoricalLabel(r, 'quran', fieldSettings.quran?.label || 'Quran')));
-          }
-          if (fieldSettings.surah?.enabled !== false) {
-            headerRow.push(cleanLabelForCsv(getHistoricalLabel(r, 'surah', fieldSettings.surah?.label || 'Surah')));
-          }
-          if (fieldSettings.laws?.enabled !== false) {
-            headerRow.push(cleanLabelForCsv(getHistoricalLabel(r, 'laws', fieldSettings.laws?.label || 'Laws of Salah')));
-          }
-          if (fieldSettings.qamar?.enabled !== false) {
-            headerRow.push(cleanLabelForCsv(getHistoricalLabel(r, 'qamar', fieldSettings.qamar?.label || 'Qamar')));
-          }
-          if (fieldSettings.notes?.enabled !== false) {
-            headerRow.push(cleanLabelForCsv(getHistoricalLabel(r, 'notes', fieldSettings.notes?.label || 'Notes')));
-          }
-        }
+        const dateStr = formatDisplayDate(r.date);
+        const studentName = r.student || '';
         
-        // Add data cells with note about original label if different
-        if (fieldSettings.quran?.enabled !== false) {
-          const historicalLabel = cleanLabelForCsv(getHistoricalLabel(r, 'quran', fieldSettings.quran?.label || 'Quran'));
-          const currentLabel = cleanLabelForCsv(fieldSettings.quran?.label || 'Quran');
-          const value = r.quran || '';
-          // Append historical label note if it differs from current
-          dataRow.push(historicalLabel !== currentLabel && value ? `${value} [was: ${historicalLabel}]` : value);
+        // Add rows for each field with their historical labels
+        if (currentSettings.quran?.enabled !== false && r.quran) {
+          rows.push([dateStr, studentName, cleanLabelForCsv(entryLabels.quran) || 'Quran', r.quran]);
         }
-        if (fieldSettings.surah?.enabled !== false) {
-          const historicalLabel = cleanLabelForCsv(getHistoricalLabel(r, 'surah', fieldSettings.surah?.label || 'Surah'));
-          const currentLabel = cleanLabelForCsv(fieldSettings.surah?.label || 'Surah');
-          const value = r.surah || '';
-          dataRow.push(historicalLabel !== currentLabel && value ? `${value} [was: ${historicalLabel}]` : value);
+        if (currentSettings.surah?.enabled !== false && r.surah) {
+          rows.push([dateStr, studentName, cleanLabelForCsv(entryLabels.surah) || 'Surah', r.surah]);
         }
-        if (fieldSettings.laws?.enabled !== false) {
-          const historicalLabel = cleanLabelForCsv(getHistoricalLabel(r, 'laws', fieldSettings.laws?.label || 'Laws of Salah'));
-          const currentLabel = cleanLabelForCsv(fieldSettings.laws?.label || 'Laws of Salah');
-          const value = r.lawsOfSalah || '';
-          dataRow.push(historicalLabel !== currentLabel && value ? `${value} [was: ${historicalLabel}]` : value);
+        if (currentSettings.laws?.enabled !== false && r.lawsOfSalah) {
+          rows.push([dateStr, studentName, cleanLabelForCsv(entryLabels.laws) || 'Laws of Salah', r.lawsOfSalah]);
         }
-        if (fieldSettings.qamar?.enabled !== false) {
-          const historicalLabel = cleanLabelForCsv(getHistoricalLabel(r, 'qamar', fieldSettings.qamar?.label || 'Qamar'));
-          const currentLabel = cleanLabelForCsv(fieldSettings.qamar?.label || 'Qamar');
-          const value = r.qamar || '';
-          dataRow.push(historicalLabel !== currentLabel && value ? `${value} [was: ${historicalLabel}]` : value);
+        if (currentSettings.qamar?.enabled !== false && r.qamar) {
+          rows.push([dateStr, studentName, cleanLabelForCsv(entryLabels.qamar) || 'Qamar', r.qamar]);
         }
-        if (fieldSettings.notes?.enabled !== false) {
-          const historicalLabel = cleanLabelForCsv(getHistoricalLabel(r, 'notes', fieldSettings.notes?.label || 'Notes'));
-          const currentLabel = cleanLabelForCsv(fieldSettings.notes?.label || 'Notes');
-          const value = r.anythingElse || '';
-          dataRow.push(historicalLabel !== currentLabel && value ? `${value} [was: ${historicalLabel}]` : value);
+        if (currentSettings.notes?.enabled !== false && r.anythingElse) {
+          rows.push([dateStr, studentName, cleanLabelForCsv(entryLabels.notes) || 'Notes', r.anythingElse]);
         }
-        
-        dataRows.push(dataRow);
       });
       
-      const rows = [headerRow, ...dataRows];
       const csv=rows.map(row=>row.map(toCsvValue).join(',')).join('\r\n');
       const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
       const url=URL.createObjectURL(blob);
@@ -1553,16 +1384,6 @@
     }
 
     async function downloadMonthlyPdf(student,monthValue){
-      const fieldSettings = getFieldSettings();
-      console.log('Generating PDF with field settings:', fieldSettings);
-      console.log('Current report rows:', currentReportRows);
-      
-      // Ensure we have data to export
-      if (!currentReportRows || currentReportRows.length === 0) {
-        showToast('No data to export for the selected student and month', 'error');
-        return;
-      }
-      
       const module=await ensureJsPdf();
       const jsPdfConstructor=module?.jsPDF||module?.default?.jsPDF||module?.default;
       if(typeof jsPdfConstructor!=='function')throw new Error('PDF library failed to load');
@@ -1586,6 +1407,8 @@
       doc.text(`Month: ${monthLabel}`,margin,y); y+=24;
 
       const lineHeight=14;
+      const currentSettings = getFieldSettings();
+      
       currentReportRows.forEach((row,index)=>{
         if(y>pageHeight-margin){doc.addPage();y=margin;}
         doc.setFont('helvetica','bold');
@@ -1593,39 +1416,37 @@
         y+=lineHeight;
 
         doc.setFont('helvetica','normal');
-        const fieldSettings = getFieldSettings();
+        
+        // Use stored field labels if available, otherwise use current settings
+        const entryLabels = row.fieldLabels || {
+          quran: currentSettings.quran?.label || '📖 Quran',
+          surah: currentSettings.surah?.label || '🕌 Surah',
+          laws: currentSettings.laws?.label || '🤲 Laws of Salah',
+          qamar: currentSettings.qamar?.label || '🌙 Qamar',
+          notes: currentSettings.notes?.label || '💭 Additional Notes'
+        };
         
         // Helper function to remove emojis for PDF compatibility
         const cleanLabelForPdf = (label) => {
           return label ? label.replace(/[\u{1F000}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{E000}-\u{F8FF}]|[\u{FE00}-\u{FE0F}]|[\u{200D}]/gu, '').trim() : '';
         };
         
-        // Helper to get historical label for a row
-        const getHistoricalLabel = (fieldName, defaultLabel) => {
-          return row.fieldLabels?.[fieldName] || defaultLabel;
-        };
-        
-        // Build sections array with only enabled fields and historical labels
+        // Build sections array with only enabled fields using historical labels
         const sections = [];
-        if (fieldSettings.quran?.enabled !== false) {
-          const label = cleanLabelForPdf(getHistoricalLabel('quran', fieldSettings.quran?.label || '📖 Quran'));
-          sections.push([label, row.quran]);
+        if (currentSettings.quran?.enabled !== false) {
+          sections.push([cleanLabelForPdf(entryLabels.quran) || 'Quran', row.quran]);
         }
-        if (fieldSettings.surah?.enabled !== false) {
-          const label = cleanLabelForPdf(getHistoricalLabel('surah', fieldSettings.surah?.label || '🕌 Surah'));
-          sections.push([label, row.surah]);
+        if (currentSettings.surah?.enabled !== false) {
+          sections.push([cleanLabelForPdf(entryLabels.surah) || 'Surah', row.surah]);
         }
-        if (fieldSettings.laws?.enabled !== false) {
-          const label = cleanLabelForPdf(getHistoricalLabel('laws', fieldSettings.laws?.label || '🤲 Laws of Salah'));
-          sections.push([label, row.lawsOfSalah]);
+        if (currentSettings.laws?.enabled !== false) {
+          sections.push([cleanLabelForPdf(entryLabels.laws) || 'Laws of Salah', row.lawsOfSalah]);
         }
-        if (fieldSettings.qamar?.enabled !== false) {
-          const label = cleanLabelForPdf(getHistoricalLabel('qamar', fieldSettings.qamar?.label || '🌙 Qamar'));
-          sections.push([label, row.qamar]);
+        if (currentSettings.qamar?.enabled !== false) {
+          sections.push([cleanLabelForPdf(entryLabels.qamar) || 'Qamar', row.qamar]);
         }
-        if (fieldSettings.notes?.enabled !== false) {
-          const label = cleanLabelForPdf(getHistoricalLabel('notes', fieldSettings.notes?.label || '💭 Additional Notes'));
-          sections.push([label, row.anythingElse]);
+        if (currentSettings.notes?.enabled !== false) {
+          sections.push([cleanLabelForPdf(entryLabels.notes) || 'Notes', row.anythingElse]);
         }
         sections.forEach(([label,value])=>{
           const text=`• ${label}: ${value||'-'}`;
