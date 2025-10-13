@@ -138,6 +138,9 @@
                 <label class="block text-sm font-semibold mb-1">💭 Additional Notes</label>
                 <textarea id="anything" rows="4" class="w-full rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border-2 border-slate-200/60 dark:border-slate-700/60 px-4 py-3 focus:border-teal-500 focus:ring-0"></textarea>
               </div>
+              <div id="editingIndicator" class="hidden p-3 rounded-xl bg-blue-50/80 dark:bg-blue-900/20 border border-blue-200/60 dark:border-blue-700/60 text-sm text-blue-700 dark:text-blue-300 mb-4">
+                ℹ️ You are editing an existing entry. Click "Update Entry" to save changes or "Cancel" to start fresh.
+              </div>
               <div class="flex flex-col sm:flex-row gap-4">
                 <button id="saveBtn" type="submit" class="btn-primary flex-1 px-6 py-4 rounded-2xl text-white font-bold inline-flex items-center justify-center gap-3"><span id="saveText">💾 Save Entry</span><div id="saveSpinner" class="spinner hidden"></div></button>
                 <button id="cancelEditBtn" type="button" class="hidden px-6 py-4 rounded-2xl bg-slate-200/80 dark:bg-slate-700/80 text-slate-700 dark:text-slate-200 font-medium border border-slate-300/40 dark:border-slate-600/40">✖️ Cancel Edit</button>
@@ -345,6 +348,21 @@
             <button id="saveFieldSettings" class="btn-primary px-6 py-2 rounded-xl text-white font-semibold">Save Settings</button>
           </div>
         </div>
+        
+        <!-- Custom Fields Section -->
+        <div class="mt-8 pt-6 border-t border-slate-200/50 dark:border-slate-700/50">
+          <h4 class="text-lg font-semibold mb-4">Custom Fields</h4>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Add your own custom fields to track additional information:</p>
+          
+          <div id="customFieldsList" class="space-y-3 mb-4"></div>
+          
+          <div class="flex gap-2 mb-4">
+            <input type="text" id="newCustomFieldLabel" placeholder="Field label (e.g., Homework)" class="flex-1 px-3 py-2 text-sm rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600">
+            <button id="addCustomField" class="btn-primary px-4 py-2 text-sm rounded-lg text-white font-semibold">Add Field</button>
+          </div>
+          
+          <p class="text-xs text-slate-500">Custom fields will appear in the form, history table, and reports.</p>
+        </div>
       </div>
     </div>
   </div>
@@ -434,6 +452,7 @@
     const saveText=document.getElementById('saveText');
     const saveSpinner=document.getElementById('saveSpinner');
     const saveStatus=document.getElementById('saveStatus');
+    const editingIndicator=document.getElementById('editingIndicator');
     const reportStudent=document.getElementById('reportStudent');
     const reportMonth=document.getElementById('reportMonth');
     const reportFormat=document.getElementById('reportFormat');
@@ -468,6 +487,7 @@
           qamar: { enabled: true, label: '🌙 Qamar' },
           notes: { enabled: true, label: '💭 Additional Notes' }
         },
+        customFields: [], // Array of { id: string, label: string, enabled: boolean }
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
@@ -574,21 +594,51 @@
         formTitle.textContent='✏️ Edit Entry';
         saveText.textContent='✅ Update Entry';
         cancelEditBtn.classList.remove('hidden');
-        inputs.student.value=n.student;
-        inputs.entryDate.value=n.date||toLocalISODate(new Date());
+        if(editingIndicator) editingIndicator.classList.remove('hidden');
+        
+        // Only update student and date if they're not already set (when loading from table)
+        if (!inputs.student.value) {
+          inputs.student.value=n.student;
+        }
+        if (!inputs.entryDate.value || inputs.entryDate.value !== n.date) {
+          inputs.entryDate.value=n.date||toLocalISODate(new Date());
+        }
+        
         inputs.quran.value=n.quran||'';
         inputs.surah.value=n.surah||'';
         inputs.laws.value=n.lawsOfSalah||'';
         inputs.qamar.value=n.qamar||'';
         inputs.anything.value=n.anythingElse||n.other||'';
+        
+        // Populate custom fields
+        const customFieldData = n.customFieldData || {};
+        const customFields = currentClassData?.customFields || [];
+        customFields.forEach(field => {
+          const input = document.getElementById(field.id);
+          if (input) {
+            input.value = customFieldData[field.id] || '';
+          }
+        });
+        
         updateFormTitle();
       } else {
         editingKey=null;
         formTitle.textContent='✨ New Entry';
         saveText.textContent='💾 Save Entry';
         cancelEditBtn.classList.add('hidden');
+        if(editingIndicator) editingIndicator.classList.add('hidden');
+        
+        // Clear all form fields except student and date
+        const currentStudent = inputs.student.value;
+        const currentDate = inputs.entryDate.value;
+        
         document.getElementById('notesForm').reset();
-        if(inputs.entryDate)inputs.entryDate.value=toLocalISODate(new Date());
+        
+        // Restore student and date
+        if (currentStudent) inputs.student.value = currentStudent;
+        if (currentDate) inputs.entryDate.value = currentDate;
+        else if(inputs.entryDate) inputs.entryDate.value=toLocalISODate(new Date());
+        
         updateFormTitle();
       }
     }
@@ -606,10 +656,52 @@
       }
     }
     
-    cancelEditBtn.addEventListener('click',()=>setEditMode(null));
+    cancelEditBtn.addEventListener('click',()=>{
+      setEditMode(null);
+      // Completely reset the form including student and date
+      document.getElementById('notesForm').reset();
+      if(inputs.entryDate) inputs.entryDate.value=toLocalISODate(new Date());
+      updateFormTitle();
+      showToast('Form cleared', 'success');
+    });
     
     // Update form title when date changes
-    inputs.entryDate?.addEventListener('change', updateFormTitle);
+    inputs.entryDate?.addEventListener('change', () => {
+      updateFormTitle();
+      checkAndLoadExistingEntry();
+    });
+    
+    // Check for existing entry when student changes
+    inputs.student?.addEventListener('change', checkAndLoadExistingEntry);
+
+    // Function to check and load existing entry for selected student and date
+    async function checkAndLoadExistingEntry() {
+      const student = inputs.student.value;
+      const selectedDate = inputs.entryDate.value;
+      
+      // Only check if we have both student and date, and we're not already editing
+      if (!student || !selectedDate || !notesCol || editingKey) return;
+      
+      const entryId = noteId(selectedDate, student);
+      const entryRef = doc(notesCol, entryId);
+      
+      try {
+        const snap = await getDoc(entryRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          // Show a subtle indicator and load the entry for editing
+          setEditMode({ id: entryId, ...data });
+          showToast(`Loaded existing entry for ${formatDisplayDate(selectedDate)}`, 'success');
+        } else {
+          // If we were in edit mode and now there's no entry, reset to new entry mode
+          if (editingKey) {
+            setEditMode(null);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking for existing entry:', error);
+      }
+    }
 
     // Student Management Event Handlers
 
@@ -756,6 +848,106 @@
       document.getElementById('notesLabel').value = '💭 Additional Notes';
     });
 
+    // Custom Fields Event Handlers
+    document.getElementById('addCustomField')?.addEventListener('click', async () => {
+      const label = document.getElementById('newCustomFieldLabel').value.trim();
+      if (!label || !currentClassId) return;
+      
+      const customFields = currentClassData?.customFields || [];
+      const fieldId = 'custom_' + Date.now();
+      
+      customFields.push({
+        id: fieldId,
+        label: label,
+        enabled: true
+      });
+      
+      try {
+        const classRef = doc(db, 'classes', currentClassId);
+        await setDoc(classRef, {
+          customFields: customFields,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+        
+        document.getElementById('newCustomFieldLabel').value = '';
+        await loadCurrentClass();
+        updateCustomFieldsDisplay();
+        updateFormFields();
+        showToast('Custom field added!', 'success');
+      } catch (error) {
+        showToast('Failed to add custom field', 'error');
+        console.error(error);
+      }
+    });
+
+    window.removeCustomField = async function(fieldId) {
+      if (!confirm('Remove this custom field? Data in this field will be preserved but hidden.')) return;
+      
+      try {
+        const customFields = (currentClassData?.customFields || []).filter(f => f.id !== fieldId);
+        const classRef = doc(db, 'classes', currentClassId);
+        await setDoc(classRef, {
+          customFields: customFields,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+        
+        await loadCurrentClass();
+        updateCustomFieldsDisplay();
+        updateFormFields();
+        showToast('Custom field removed!', 'success');
+      } catch (error) {
+        showToast('Failed to remove custom field', 'error');
+        console.error(error);
+      }
+    };
+
+    window.toggleCustomField = async function(fieldId) {
+      try {
+        const customFields = (currentClassData?.customFields || []).map(f => {
+          if (f.id === fieldId) {
+            return { ...f, enabled: !f.enabled };
+          }
+          return f;
+        });
+        
+        const classRef = doc(db, 'classes', currentClassId);
+        await setDoc(classRef, {
+          customFields: customFields,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+        
+        await loadCurrentClass();
+        updateCustomFieldsDisplay();
+        updateFormFields();
+        showToast('Field updated!', 'success');
+      } catch (error) {
+        showToast('Failed to update field', 'error');
+        console.error(error);
+      }
+    };
+
+    function updateCustomFieldsDisplay() {
+      const customFieldsList = document.getElementById('customFieldsList');
+      if (!customFieldsList) return;
+      
+      const customFields = currentClassData?.customFields || [];
+      
+      if (customFields.length === 0) {
+        customFieldsList.innerHTML = '<p class="text-sm text-slate-500 text-center py-4">No custom fields added yet</p>';
+        return;
+      }
+      
+      customFieldsList.innerHTML = customFields.map(field => `
+        <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60">
+          <div class="flex items-center gap-3">
+            <input type="checkbox" ${field.enabled ? 'checked' : ''} onchange="toggleCustomField('${field.id}')" class="rounded">
+            <span class="font-medium">${esc(field.label)}</span>
+          </div>
+          <button onclick="removeCustomField('${field.id}')" class="px-3 py-1 text-xs rounded-lg ring-1 ring-red-300 text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20">Remove</button>
+        </div>
+      `).join('');
+    }
+
     // Class and Student Display Functions
     async function loadAndDisplayClasses() {
       if (!currentUser) {
@@ -847,6 +1039,7 @@
       document.getElementById('enableNotes').checked = fieldSettings.notes?.enabled !== false;
       document.getElementById('notesLabel').value = fieldSettings.notes?.label || '💭 Additional Notes';
 
+      updateCustomFieldsDisplay();
       settingsModal.classList.remove('hidden');
     }
 
@@ -921,18 +1114,47 @@
         notesDiv.style.display = 'none';
       }
       
+      // Handle custom fields
+      updateCustomFieldsInForm();
+      
       // Update table headers with new field labels
       updateTableHeaders();
+    }
+
+    function updateCustomFieldsInForm() {
+      const customFields = currentClassData?.customFields || [];
+      const formElement = document.getElementById('notesForm');
+      const gridContainer = formElement.querySelector('.grid.grid-cols-1.md\\:grid-cols-2.gap-4:nth-of-type(2)');
+      
+      if (!gridContainer) return;
+      
+      // Remove existing custom field inputs
+      const existingCustomFields = gridContainer.querySelectorAll('[data-custom-field]');
+      existingCustomFields.forEach(el => el.remove());
+      
+      // Add custom fields that are enabled
+      customFields.filter(f => f.enabled).forEach(field => {
+        const div = document.createElement('div');
+        div.setAttribute('data-custom-field', field.id);
+        div.innerHTML = `
+          <label class="block text-sm font-semibold mb-1">${esc(field.label)}</label>
+          <input id="${field.id}" type="text" class="w-full rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border-2 border-slate-200/60 dark:border-slate-700/60 px-4 py-3 focus:border-emerald-500 focus:ring-0" />
+        `;
+        gridContainer.appendChild(div);
+      });
     }
 
     // Update table headers with custom field labels and hide disabled fields
     function updateTableHeaders() {
       const fieldSettings = getFieldSettings();
+      const customFields = (currentClassData?.customFields || []).filter(f => f.enabled);
       console.log('Updating table headers with field settings:', fieldSettings);
       
       // Update progress history table headers
       const historyTable = document.querySelector('#historyBody').closest('table');
-      const historyHeaders = historyTable.querySelectorAll('thead th');
+      const historyHeaderRow = historyTable.querySelector('thead tr');
+      const historyHeaders = historyHeaderRow.querySelectorAll('th');
+      
       if (historyHeaders.length >= 7) {
         // Update labels and hide disabled columns
         historyHeaders[2].textContent = fieldSettings.quran?.label || '📖 Quran';
@@ -950,6 +1172,20 @@
         historyHeaders[6].textContent = fieldSettings.notes?.label || '💭 Additional Notes';
         historyHeaders[6].style.display = fieldSettings.notes?.enabled !== false ? '' : 'none';
         
+        // Remove existing custom field headers
+        const existingCustomHeaders = historyHeaderRow.querySelectorAll('[data-custom-header]');
+        existingCustomHeaders.forEach(header => header.remove());
+        
+        // Add custom field headers before Actions column
+        const actionsHeader = historyHeaders[7];
+        customFields.forEach(field => {
+          const th = document.createElement('th');
+          th.className = 'px-6 py-3 font-semibold';
+          th.textContent = field.label;
+          th.setAttribute('data-custom-header', field.id);
+          historyHeaderRow.insertBefore(th, actionsHeader);
+        });
+        
         console.log('Updated history table headers');
       } else {
         console.log('History table headers not found, found', historyHeaders.length, 'headers');
@@ -957,7 +1193,9 @@
       
       // Update monthly report table headers
       const reportTable = document.querySelector('#reportBody').closest('table');
-      const reportHeaders = reportTable.querySelectorAll('thead th');
+      const reportHeaderRow = reportTable.querySelector('thead tr');
+      const reportHeaders = reportHeaderRow.querySelectorAll('th');
+      
       if (reportHeaders.length >= 6) {
         // Update labels and hide disabled columns
         reportHeaders[1].textContent = fieldSettings.quran?.label || '📖 Quran';
@@ -974,6 +1212,19 @@
         
         reportHeaders[5].textContent = fieldSettings.notes?.label || '💭 Additional Notes';
         reportHeaders[5].style.display = fieldSettings.notes?.enabled !== false ? '' : 'none';
+        
+        // Remove existing custom field headers
+        const existingCustomHeaders = reportHeaderRow.querySelectorAll('[data-custom-header]');
+        existingCustomHeaders.forEach(header => header.remove());
+        
+        // Add custom field headers at the end
+        customFields.forEach(field => {
+          const th = document.createElement('th');
+          th.className = 'px-6 py-3 font-semibold';
+          th.textContent = field.label;
+          th.setAttribute('data-custom-header', field.id);
+          reportHeaderRow.appendChild(th);
+        });
         
         console.log('Updated report table headers');
       } else {
@@ -1083,6 +1334,19 @@
         notes: getFieldSettings().notes?.label || '💭 Additional Notes'
       };
       
+      // Capture custom field values and labels
+      const customFields = currentClassData?.customFields || [];
+      const customFieldData = {};
+      const customFieldLabels = {};
+      
+      customFields.forEach(field => {
+        const input = document.getElementById(field.id);
+        if (input) {
+          customFieldData[field.id] = input.value.trim();
+          customFieldLabels[field.id] = field.label;
+        }
+      });
+      
       const payload={
         id,
         date:entryDate,
@@ -1092,7 +1356,9 @@
         lawsOfSalah:inputs.laws.value.trim(),
         qamar:inputs.qamar.value.trim(),
         anythingElse:inputs.anything.value.trim(),
+        customFieldData: customFieldData, // Store custom field values
         fieldLabels:currentFieldLabels, // Store the labels used at creation time
+        customFieldLabels: customFieldLabels, // Store custom field labels at creation time
         updatedAt:serverTimestamp(),
         ownerUid:auth.currentUser?.uid||null,
         classId:currentClassId
@@ -1102,10 +1368,21 @@
         if(!snap.exists())payload.createdAt=serverTimestamp();
         await setDoc(ref,payload,{merge:true});
         saveSpinner.classList.add('hidden');
-        showToast(editingKey?'Updated ✓':'Saved ✓','success');
-        saveStatus.textContent=editingKey?'Updated ✅':'Saved ✅';
+        const wasEditing = !!editingKey;
+        showToast(wasEditing?'Updated ✓':'Saved ✓','success');
+        saveStatus.textContent=wasEditing?'Updated ✅':'Saved ✅';
         setTimeout(()=>saveStatus.textContent='',1200);
+        
+        // Clear only the content fields, keep student and date selected
+        const savedStudent = inputs.student.value;
+        const savedDate = inputs.entryDate.value;
+        
         setEditMode(null);
+        
+        // Restore student and date
+        inputs.student.value = savedStudent;
+        inputs.entryDate.value = savedDate;
+        updateFormTitle();
       } catch (error) {
         saveSpinner.classList.add('hidden');
         console.error('Error saving entry:', error);
@@ -1205,8 +1482,17 @@
         return;
       }
       emptyState.classList.add('hidden');
+      const customFields = (currentClassData?.customFields || []).filter(f => f.enabled);
+      
       rows.forEach(r=>{
         const tr=document.createElement('tr');
+        
+        // Build custom field cells
+        const customFieldCells = customFields.map(field => {
+          const value = r.customFieldData?.[field.id] || '';
+          return `<td class='px-6 py-3' data-custom-cell='${field.id}'>${esc(value)}</td>`;
+        }).join('');
+        
         tr.innerHTML=`
           <td class='px-6 py-3 font-medium'>${esc(formatDisplayDate(r.date))}</td>
           <td class='px-6 py-3'>${esc(r.student||'')}</td>
@@ -1215,6 +1501,7 @@
           <td class='px-6 py-3'>${esc(r.lawsOfSalah||'')}</td>
           <td class='px-6 py-3'>${esc(r.qamar||'')}</td>
           <td class='px-6 py-3'>${esc(r.anythingElse||'')}</td>
+          ${customFieldCells}
           <td class='px-6 py-3 whitespace-nowrap'>
             <button class='px-2 py-1 text-xs rounded-lg ring-1 ring-slate-300 mr-2 hover:bg-slate-100 dark:hover:bg-slate-800' data-action='edit' data-id='${r.id}'>Edit</button>
             <button class='px-2 py-1 text-xs rounded-lg ring-1 ring-red-300 text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20' data-action='delete' data-id='${r.id}'>Delete</button>
@@ -1269,9 +1556,18 @@
         });
         if(requestId!==reportRequestToken)return;
 
+        const customFields = (currentClassData?.customFields || []).filter(f => f.enabled);
+        
         reportBody.innerHTML=sorted.map(r=>{
           // Use stored field labels if available, otherwise use current settings
           const entryLabels = r.fieldLabels || getFieldSettings();
+          
+          // Build custom field cells
+          const customFieldCells = customFields.map(field => {
+            const value = r.customFieldData?.[field.id] || '';
+            return `<td class='px-6 py-3' data-custom-cell='${field.id}'>${esc(value)}</td>`;
+          }).join('');
+          
           return `
           <tr data-entry-labels='${JSON.stringify(entryLabels).replace(/'/g, "&apos;")}'>
             <td class='px-6 py-3 font-medium'>${esc(formatDisplayDate(r.date))}</td>
@@ -1280,6 +1576,7 @@
             <td class='px-6 py-3'>${esc(r.lawsOfSalah||'')}</td>
             <td class='px-6 py-3'>${esc(r.qamar||'')}</td>
             <td class='px-6 py-3'>${esc(r.anythingElse||'')}</td>
+            ${customFieldCells}
           </tr>`;
         }).join('');
 
@@ -1331,6 +1628,7 @@
 
     function downloadMonthlyCsv(student,monthValue){
       const currentSettings = getFieldSettings();
+      const customFields = (currentClassData?.customFields || []).filter(f => f.enabled);
       
       // Helper function to remove emojis for CSV compatibility
       const cleanLabelForCsv = (label) => {
@@ -1349,6 +1647,8 @@
           qamar: currentSettings.qamar?.label || '🌙 Qamar',
           notes: currentSettings.notes?.label || '💭 Additional Notes'
         };
+        
+        const entryCustomLabels = r.customFieldLabels || {};
         
         const dateStr = formatDisplayDate(r.date);
         const studentName = r.student || '';
@@ -1369,6 +1669,15 @@
         if (currentSettings.notes?.enabled !== false && r.anythingElse) {
           rows.push([dateStr, studentName, cleanLabelForCsv(entryLabels.notes) || 'Notes', r.anythingElse]);
         }
+        
+        // Add custom fields
+        customFields.forEach(field => {
+          const value = r.customFieldData?.[field.id];
+          if (value) {
+            const label = entryCustomLabels[field.id] || field.label;
+            rows.push([dateStr, studentName, cleanLabelForCsv(label), value]);
+          }
+        });
       });
       
       const csv=rows.map(row=>row.map(toCsvValue).join(',')).join('\r\n');
@@ -1448,6 +1757,18 @@
         if (currentSettings.notes?.enabled !== false) {
           sections.push([cleanLabelForPdf(entryLabels.notes) || 'Notes', row.anythingElse]);
         }
+        
+        // Add custom fields to sections
+        const customFields = (currentClassData?.customFields || []).filter(f => f.enabled);
+        const entryCustomLabels = row.customFieldLabels || {};
+        customFields.forEach(field => {
+          const value = row.customFieldData?.[field.id];
+          if (value) {
+            const label = entryCustomLabels[field.id] || field.label;
+            sections.push([cleanLabelForPdf(label), value]);
+          }
+        });
+        
         sections.forEach(([label,value])=>{
           const text=`• ${label}: ${value||'-'}`;
           const lines=doc.splitTextToSize(text,Math.max(maxWidth-20,0));
